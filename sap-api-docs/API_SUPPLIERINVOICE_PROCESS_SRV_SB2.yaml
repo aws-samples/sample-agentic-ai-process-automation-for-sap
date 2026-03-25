@@ -1,0 +1,838 @@
+openapi: 3.0.0
+info:
+  title: SAP Supplier Invoice Process API
+  description: SAP OData service for managing supplier invoices, including header data, line items, tax information, and account assignments
+  version: 1.0.0
+  contact:
+    name: SAP API Support
+    url: https://help.sap.com
+
+servers:
+  - url: https://your-sap-system.com/sap/opu/odata/sap/API_SUPPLIERINVOICE_PROCESS_SRV
+    description: SAP Production Server
+
+security:
+  - basicAuth: []
+
+components:
+  securitySchemes:
+    basicAuth:
+      type: http
+      scheme: basic
+      description: SAP username and password
+
+  schemas:
+    SupplierInvoice:
+      type: object
+      properties:
+        SupplierInvoice:
+          type: string
+          maxLength: 10
+          description: Document Number of an Invoice Document
+        FiscalYear:
+          type: string
+          maxLength: 4
+          description: Fiscal Year
+        CompanyCode:
+          type: string
+          maxLength: 4
+          description: Company Code
+        DocumentDate:
+          type: string
+          format: date
+          description: Invoice Date in Document
+        PostingDate:
+          type: string
+          format: date
+          description: Posting Date in the Document
+        CreationDate:
+          type: string
+          format: date
+          description: Day On Which Accounting Document Was Entered
+        SupplierInvoiceIDByInvcgParty:
+          type: string
+          maxLength: 16
+          description: Reference Document Number
+        InvoicingParty:
+          type: string
+          maxLength: 10
+          description: Different Invoicing Party
+        DocumentCurrency:
+          type: string
+          maxLength: 5
+          description: Currency Key
+        InvoiceGrossAmount:
+          type: number
+          format: decimal
+          description: Gross Invoice Amount in Document Currency
+        UnplannedDeliveryCost:
+          type: number
+          format: decimal
+          description: Unplanned Delivery Costs
+        DocumentHeaderText:
+          type: string
+          maxLength: 25
+          description: Document Header Text
+        PaymentTerms:
+          type: string
+          maxLength: 4
+          description: Terms of Payment Key
+        PaymentBlockingReason:
+          type: string
+          maxLength: 1
+          description: Payment Block Key
+        SupplierInvoiceStatus:
+          type: string
+          maxLength: 1
+          description: Invoice document status
+
+    SupplierInvoiceItemPurOrdRef:
+      type: object
+      properties:
+        SupplierInvoice:
+          type: string
+          maxLength: 10
+          description: Document Number of an Accounting Document
+        FiscalYear:
+          type: string
+          maxLength: 4
+          description: Fiscal Year
+        SupplierInvoiceItem:
+          type: string
+          maxLength: 6
+          description: Document Item in Invoice Document
+        PurchaseOrder:
+          type: string
+          maxLength: 10
+          description: Purchasing Document Number
+        PurchaseOrderItem:
+          type: string
+          maxLength: 5
+          description: Item Number of Purchasing Document
+        Plant:
+          type: string
+          maxLength: 4
+          description: Plant
+        TaxCode:
+          type: string
+          maxLength: 2
+          description: Tax on sales/purchases code
+        DocumentCurrency:
+          type: string
+          maxLength: 5
+          description: Currency Key
+        SupplierInvoiceItemAmount:
+          type: number
+          format: decimal
+          description: Amount in Document Currency
+        QuantityInPurchaseOrderUnit:
+          type: number
+          format: decimal
+          description: Quantity
+        SupplierInvoiceItemText:
+          type: string
+          maxLength: 50
+          description: Item Text
+
+    SupplierInvoiceTax:
+      type: object
+      properties:
+        SupplierInvoice:
+          type: string
+          maxLength: 10
+          description: Document Number of an Invoice Document
+        FiscalYear:
+          type: string
+          maxLength: 4
+          description: Fiscal Year
+        TaxCode:
+          type: string
+          maxLength: 2
+          description: Tax code
+        SupplierInvoiceTaxCounter:
+          type: string
+          maxLength: 6
+          description: Document Item in Invoice Document
+        DocumentCurrency:
+          type: string
+          maxLength: 5
+          description: Currency Key
+        TaxAmount:
+          type: number
+          format: decimal
+          description: Tax Amount in Document Currency with +/- Sign
+        TaxBaseAmountInTransCrcy:
+          type: number
+          format: decimal
+          description: Tax Base Amount in Document Currency
+
+    SupplierInvoiceItemGLAcct:
+      type: object
+      properties:
+        SupplierInvoice:
+          type: string
+          maxLength: 10
+          description: Document Number of an Accounting Document
+        FiscalYear:
+          type: string
+          maxLength: 4
+          description: Fiscal Year
+        SupplierInvoiceItem:
+          type: string
+          maxLength: 4
+          description: Four Character Sequential Number for Coding Block
+        GLAccount:
+          type: string
+          maxLength: 10
+          description: G/L Account Number
+        CostCenter:
+          type: string
+          maxLength: 10
+          description: Cost Center
+        BusinessArea:
+          type: string
+          maxLength: 4
+          description: Business Area
+        DocumentCurrency:
+          type: string
+          maxLength: 5
+          description: Currency Key
+        SupplierInvoiceItemAmount:
+          type: number
+          format: decimal
+          description: Amount in Document Currency
+
+    ODataCollection:
+      type: object
+      properties:
+        d:
+          type: object
+          properties:
+            results:
+              type: array
+              items:
+                oneOf:
+                  - $ref: '#/components/schemas/SupplierInvoice'
+                  - $ref: '#/components/schemas/SupplierInvoiceItemPurOrdRef'
+                  - $ref: '#/components/schemas/SupplierInvoiceTax'
+
+    ODataSingle:
+      type: object
+      properties:
+        d:
+          oneOf:
+            - $ref: '#/components/schemas/SupplierInvoice'
+            - $ref: '#/components/schemas/SupplierInvoiceItemPurOrdRef'
+            - $ref: '#/components/schemas/SupplierInvoiceTax'
+
+    PostInvoiceResponse:
+      type: object
+      properties:
+        d:
+          type: object
+          properties:
+            Success:
+              type: boolean
+              description: TRUE
+
+    CancelInvoiceResponse:
+      type: object
+      properties:
+        d:
+          type: object
+          properties:
+            ReverseDocument:
+              type: string
+              maxLength: 10
+              description: Reversed With
+            FiscalYear:
+              type: string
+              maxLength: 4
+              description: Fiscal Year
+            Success:
+              type: boolean
+              description: TRUE
+
+    ReleaseInvoiceResponse:
+      type: object
+      properties:
+        d:
+          type: object
+          properties:
+            Success:
+              type: boolean
+              description: TRUE
+
+paths:
+  /A_SupplierInvoice:
+    get:
+      summary: Get all supplier invoices
+      description: Reads supplier invoice data using supplier invoice, fiscal year, company code, document currency, and other parameters
+      security:
+        - basicAuth: []
+      parameters:
+        - name: $filter
+          in: query
+          schema:
+            type: string
+          description: Filter expression
+          example: "CompanyCode eq '1000'"
+        - name: $select
+          in: query
+          schema:
+            type: string
+          description: Select specific fields
+          example: "SupplierInvoice,FiscalYear,InvoiceGrossAmount"
+        - name: $expand
+          in: query
+          schema:
+            type: string
+          description: Expand related entities
+          example: "to_SuplrInvcItemPurOrdRef,to_SupplierInvoiceTax"
+        - name: $top
+          in: query
+          schema:
+            type: integer
+          description: Number of records to return
+          example: 50
+        - name: $skip
+          in: query
+          schema:
+            type: integer
+          description: Number of records to skip
+          example: 0
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ODataCollection'
+        '401':
+          description: Unauthorized
+        '500':
+          description: Server Error
+
+    post:
+      summary: Create a new supplier invoice
+      description: Creates a supplier invoice using company code, invoice gross amount, and invoicing party
+      security:
+        - basicAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SupplierInvoice'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ODataSingle'
+        '400':
+          description: Bad Request
+        '401':
+          description: Unauthorized
+
+  /A_SupplierInvoice(SupplierInvoice='{SupplierInvoice}',FiscalYear='{FiscalYear}'):
+    get:
+      summary: Get supplier invoice by key
+      description: Reads supplier invoice data by key fields for document number and fiscal year
+      security:
+        - basicAuth: []
+      parameters:
+        - name: SupplierInvoice
+          in: path
+          required: true
+          schema:
+            type: string
+            maxLength: 10
+          description: Document Number of an Invoice Document
+        - name: FiscalYear
+          in: path
+          required: true
+          schema:
+            type: string
+            maxLength: 4
+          description: Fiscal Year
+        - name: $expand
+          in: query
+          schema:
+            type: string
+          description: Expand related entities
+          example: "to_SuplrInvcItemPurOrdRef,to_SupplierInvoiceTax"
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ODataSingle'
+        '404':
+          description: Not Found
+        '401':
+          description: Unauthorized
+
+    delete:
+      summary: Delete supplier invoice
+      description: Deletes not-posted supplier invoice (for example in status Held or Parked)
+      security:
+        - basicAuth: []
+      parameters:
+        - name: SupplierInvoice
+          in: path
+          required: true
+          schema:
+            type: string
+            maxLength: 10
+          description: Document Number of an Invoice Document
+        - name: FiscalYear
+          in: path
+          required: true
+          schema:
+            type: string
+            maxLength: 4
+          description: Fiscal Year
+      responses:
+        '204':
+          description: Deleted
+        '404':
+          description: Not Found
+        '401':
+          description: Unauthorized
+
+  /A_SuplrInvcItemPurOrdRef:
+    get:
+      summary: Get supplier invoice items with purchase order reference
+      description: Reads supplier invoice item data with purchase order reference
+      security:
+        - basicAuth: []
+      parameters:
+        - name: $filter
+          in: query
+          schema:
+            type: string
+          description: Filter expression
+          example: "SupplierInvoice eq '5100000001'"
+        - name: $expand
+          in: query
+          schema:
+            type: string
+          description: Expand related entities
+          example: "to_SupplierInvoiceItmAcctAssgmt"
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ODataCollection'
+        '401':
+          description: Unauthorized
+
+  /A_SuplrInvcItemPurOrdRef(SupplierInvoice='{SupplierInvoice}',FiscalYear='{FiscalYear}',SupplierInvoiceItem='{SupplierInvoiceItem}'):
+    get:
+      summary: Get supplier invoice item with purchase order reference by key
+      description: Reads supplier invoice item data with purchase order reference using key fields
+      security:
+        - basicAuth: []
+      parameters:
+        - name: SupplierInvoice
+          in: path
+          required: true
+          schema:
+            type: string
+            maxLength: 10
+        - name: FiscalYear
+          in: path
+          required: true
+          schema:
+            type: string
+            maxLength: 4
+        - name: SupplierInvoiceItem
+          in: path
+          required: true
+          schema:
+            type: string
+            maxLength: 6
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ODataSingle'
+        '404':
+          description: Not Found
+
+  /A_SupplierInvoiceTax:
+    get:
+      summary: Get supplier invoice tax data
+      description: Reads tax data for supplier invoice
+      security:
+        - basicAuth: []
+      parameters:
+        - name: $filter
+          in: query
+          schema:
+            type: string
+          description: Filter expression
+          example: "SupplierInvoice eq '5100000001'"
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ODataCollection'
+
+  /A_SupplierInvoiceItemGLAcct:
+    get:
+      summary: Get supplier invoice items for G/L account posting
+      description: Reads supplier invoice item data for posting to G/L account
+      security:
+        - basicAuth: []
+      parameters:
+        - name: $filter
+          in: query
+          schema:
+            type: string
+          description: Filter expression
+          example: "SupplierInvoice eq '5100000001'"
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ODataCollection'
+
+  /A_SuplrInvcHeaderWhldgTax:
+    get:
+      summary: Get withholding tax data
+      description: Reads withholding tax data of supplier invoice
+      security:
+        - basicAuth: []
+      parameters:
+        - name: $filter
+          in: query
+          schema:
+            type: string
+          description: Filter expression
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ODataCollection'
+
+  /A_SuplrInvcItemAcctAssgmt:
+    get:
+      summary: Get account assignment data
+      description: Reads account assignment data of supplier invoice item
+      security:
+        - basicAuth: []
+      parameters:
+        - name: $filter
+          in: query
+          schema:
+            type: string
+          description: Filter expression
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ODataCollection'
+
+  /A_SupplierInvoiceItemAsset:
+    get:
+      summary: Get supplier invoice items for asset posting
+      description: Reads supplier invoice item data for posting to asset
+      security:
+        - basicAuth: []
+      parameters:
+        - name: $filter
+          in: query
+          schema:
+            type: string
+          description: Filter expression
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ODataCollection'
+
+  /A_SupplierInvoiceItemMaterial:
+    get:
+      summary: Get supplier invoice items for material posting
+      description: Reads supplier invoice item data for posting to material
+      security:
+        - basicAuth: []
+      parameters:
+        - name: $filter
+          in: query
+          schema:
+            type: string
+          description: Filter expression
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ODataCollection'
+
+  /A_SuplrInvoiceAdditionalData:
+    get:
+      summary: Get additional data
+      description: Reads additional data for supplier invoice
+      security:
+        - basicAuth: []
+      parameters:
+        - name: $filter
+          in: query
+          schema:
+            type: string
+          description: Filter expression
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ODataCollection'
+
+  /Post:
+    post:
+      summary: Post supplier invoice
+      description: |
+        Posts a supplier invoice and returns success status.
+        **Important Note:** Date fields must use SAP OData format: /Date(milliseconds)/
+      security:
+        - basicAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                SupplierInvoice:
+                  type: string
+                  maxLength: 10
+                  description: Document Number of an Invoice Document
+                FiscalYear:
+                  type: string
+                  maxLength: 4
+                  description: Fiscal Year
+                DocumentDate:
+                  type: string
+                  description: Document date in SAP OData format: /Date(milliseconds)/
+                  example: "/Date(1730332800000)/"
+                PostingDate:
+                  type: string
+                  description: Posting date in SAP OData format: /Date(milliseconds)/
+                  example: "/Date(1730332800000)/"
+              required:
+                - SupplierInvoice
+                - FiscalYear
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PostInvoiceResponse'
+        '400':
+          description: Bad Request - Invalid date format (use /Date(milliseconds)/ format)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        type: string
+                        example: "CX_SY_CONVERSION_NO_DATE_TIME"
+                      message:
+                        type: object
+                        properties:
+                          lang:
+                            type: string
+                            example: "en"
+                          value:
+                            type: string
+                            example: "Conversion error for property 'DocumentDate'"
+        '401':
+          description: Unauthorized
+
+  /Release:
+    post:
+      summary: Release supplier invoice (Function Import)
+      description: |
+        Releases a blocked supplier invoice using SAP OData Function Import.
+        **Note: Only POST method is supported for this endpoint.**
+        Example URL: /Release?SupplierInvoice='5105623069'&FiscalYear='2019'
+      security:
+        - basicAuth: []
+      parameters:
+        - name: SupplierInvoice
+          in: query
+          required: true
+          description: Document Number of an Invoice Document
+          schema:
+            type: string
+            maxLength: 10
+            example: "5100001410"
+        - name: FiscalYear
+          in: query
+          required: true
+          description: Fiscal Year
+          schema:
+            type: string
+            maxLength: 4
+            pattern: '^\d{4}$'
+            example: "2024"
+      responses:
+        '200':
+          description: Invoice successfully released
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  d:
+                    type: object
+                    properties:
+                      Release:
+                        type: object
+                        properties:
+                          __metadata:
+                            type: object
+                            properties:
+                              type:
+                                type: string
+                                example: "API_SUPPLIERINVOICE_PROCESS_SRV.ReleaseInvoiceExportParameters"
+                          Success:
+                            type: boolean
+                            example: true
+              example:
+                d:
+                  Release:
+                    __metadata:
+                      type: "API_SUPPLIERINVOICE_PROCESS_SRV.ReleaseInvoiceExportParameters"
+                    Success: true
+        '400':
+          description: Bad Request - Invalid parameters
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        type: string
+                      message:
+                        type: string
+                        example: "Invalid invoice number or fiscal year"
+        '401':
+          description: Unauthorized - Authentication required
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        type: string
+                      message:
+                        type: string
+                        example: "Authentication required"
+        '405':
+          description: Method Not Allowed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        type: string
+                      message:
+                        type: string
+                        example: "Only POST method is allowed for this endpoint"
+
+  /Cancel:
+    post:
+      summary: Cancel supplier invoice
+      description: Reverses a supplier invoice and returns the reversal number
+      security:
+        - basicAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                SupplierInvoice:
+                  type: string
+                  maxLength: 10
+                  description: Document Number of an Invoice Document
+                FiscalYear:
+                  type: string
+                  maxLength: 4
+                  description: Fiscal Year
+                PostingDate:
+                  type: string
+                  format: date-time
+                  description: Posting Date
+                ReversalReason:
+                  type: string
+                  maxLength: 2
+                  description: Reversal Reason
+              required:
+                - SupplierInvoice
+                - FiscalYear
+                - PostingDate
+                - ReversalReason
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CancelInvoiceResponse'
+        '400':
+          description: Bad Request
+        '401':
+          description: Unauthorized
+
+  /$metadata:
+    get:
+      summary: Get service metadata
+      description: Returns the OData service metadata document
+      security:
+        - basicAuth: []
+      responses:
+        '200':
+          description: Metadata XML
+          content:
+            application/xml:
+              schema:
+                type: string

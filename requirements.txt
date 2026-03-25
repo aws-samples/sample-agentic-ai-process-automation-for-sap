@@ -1,0 +1,28 @@
+# Core AWS and deployment dependencies
+boto3
+bedrock-agentcore
+bedrock-agentcore-starter-toolkit
+python-dotenv
+
+# Strands Agent dependencies
+strands-agents
+strands-agents-tools
+uv
+
+# MCP Server dependencies
+fastmcp
+requests
+mcp
+werkzeug==3.1.1
+
+# Web framework dependencies
+fastapi
+uvicorn[standard]
+pydantic
+starlette
+
+# Streamlit Dashboard dependencies
+streamlit
+pandas
+plotly
+numpy

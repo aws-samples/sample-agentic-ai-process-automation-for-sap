@@ -1,0 +1,431 @@
+openapi: 3.0.3
+info:
+  title: SAP Sales Order API
+  description: OpenAPI specification for SAP API_SALES_ORDER_SRV OData service
+  version: 1.0.0
+  contact:
+    name: SAP Sales Order Service
+    url: https://your-sap-system.com
+servers:
+  - url: https://your-sap-system.com/sap/opu/odata/SAP/API_SALES_ORDER_SRV
+    description: SAP Sales Order Service
+
+security:
+  - basicAuth: []
+
+components:
+  securitySchemes:
+    basicAuth:
+      type: http
+      scheme: basic
+
+  schemas:
+    SalesOrder:
+      type: object
+      properties:
+        SalesOrder:
+          type: string
+          maxLength: 10
+          description: Sales Order Number
+        SalesOrderType:
+          type: string
+          maxLength: 4
+          description: Sales Order Type
+        SalesOrganization:
+          type: string
+          maxLength: 4
+          description: Sales Organization
+        DistributionChannel:
+          type: string
+          maxLength: 2
+          description: Distribution Channel
+        OrganizationDivision:
+          type: string
+          maxLength: 2
+          description: Division
+        SoldToParty:
+          type: string
+          maxLength: 10
+          description: Sold-to Party
+        CreationDate:
+          type: string
+          format: date
+          description: Record Creation Date
+        CreatedByUser:
+          type: string
+          maxLength: 12
+          description: Name of Person Responsible for Creating the Object
+        LastChangeDate:
+          type: string
+          format: date
+          description: Last Changed On
+        PurchaseOrderByCustomer:
+          type: string
+          maxLength: 35
+          description: Customer Reference
+        SalesOrderDate:
+          type: string
+          format: date
+          description: Document Date (Date Received/Sent)
+        TotalNetAmount:
+          type: number
+          format: decimal
+          description: Net Value of the Sales Document in Document Currency
+        OverallDeliveryStatus:
+          type: string
+          maxLength: 1
+          description: Delivery Status (All Items)
+        OverallSDProcessStatus:
+          type: string
+          maxLength: 1
+          description: Overall Processing Status (Header/All Items)
+        OverallSDDocumentRejectionSts:
+          type: string
+          maxLength: 1
+          description: Rejection Status (All Items)
+        TransactionCurrency:
+          type: string
+          maxLength: 5
+          description: SD Document Currency
+        RequestedDeliveryDate:
+          type: string
+          format: date
+          description: Requested Delivery Date
+        IncotermsClassification:
+          type: string
+          maxLength: 3
+          description: Incoterms (Part 1)
+        IncotermsTransferLocation:
+          type: string
+          maxLength: 28
+          description: Incoterms (Part 2)
+        CustomerPaymentTerms:
+          type: string
+          maxLength: 4
+          description: Terms of Payment Key
+        CustomerGroup:
+          type: string
+          maxLength: 2
+          description: Customer Group
+        CustomerAccountAssignmentGroup:
+          type: string
+          maxLength: 2
+          description: Account Assignment Group for Customer
+
+    SalesOrderItem:
+      type: object
+      properties:
+        SalesOrder:
+          type: string
+          maxLength: 10
+          description: Sales Order
+        SalesOrderItem:
+          type: string
+          maxLength: 6
+          description: Sales Order Item
+        SalesOrderItemText:
+          type: string
+          maxLength: 40
+          description: Short text for sales order item
+        Material:
+          type: string
+          maxLength: 40
+          description: Material Number
+        RequestedQuantity:
+          type: number
+          format: decimal
+          description: Requested Quantity
+        RequestedQuantityUnit:
+          type: string
+          maxLength: 3
+          description: Unit of the Requested Quantity
+        NetAmount:
+          type: number
+          format: decimal
+          description: Net Value of the Document Item in Document Currency
+        TransactionCurrency:
+          type: string
+          maxLength: 5
+          description: SD Document Currency
+        MaterialGroup:
+          type: string
+          maxLength: 9
+          description: Material Group
+        ProductionPlant:
+          type: string
+          maxLength: 4
+          description: Plant (Own or External)
+        StorageLocation:
+          type: string
+          maxLength: 4
+          description: Storage Location
+        DeliveryStatus:
+          type: string
+          maxLength: 1
+          description: Delivery Status (Item)
+        SDProcessStatus:
+          type: string
+          maxLength: 1
+          description: Overall Processing Status (Item)
+
+    SalesOrderCollection:
+      type: object
+      properties:
+        d:
+          type: object
+          properties:
+            results:
+              type: array
+              items:
+                $ref: '#/components/schemas/SalesOrder'
+
+    Error:
+      type: object
+      properties:
+        error:
+          type: object
+          properties:
+            code:
+              type: string
+            message:
+              type: object
+              properties:
+                lang:
+                  type: string
+                value:
+                  type: string
+
+paths:
+  /A_SalesOrder:
+    get:
+      summary: Get Sales Orders
+      description: Retrieve a list of sales orders
+      parameters:
+        - name: $filter
+          in: query
+          description: Filter criteria
+          required: false
+          schema:
+            type: string
+          example: "SalesOrder eq '2'"
+        - name: $select
+          in: query
+          description: Select specific fields
+          required: false
+          schema:
+            type: string
+          example: "SalesOrder,SalesOrderType,TotalNetAmount"
+        - name: $expand
+          in: query
+          description: Expand related entities
+          required: false
+          schema:
+            type: string
+          example: "to_Item"
+        - name: $top
+          in: query
+          description: Number of records to return
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 1000
+        - name: $skip
+          in: query
+          description: Number of records to skip
+          required: false
+          schema:
+            type: integer
+            minimum: 0
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SalesOrderCollection'
+        '400':
+          description: Bad Request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /A_SalesOrder('{SalesOrder}'):
+    get:
+      summary: Get Sales Order by ID
+      description: Retrieve a specific sales order by its ID
+      parameters:
+        - name: SalesOrder
+          in: path
+          required: true
+          description: Sales Order ID
+          schema:
+            type: string
+            maxLength: 10
+          example: "2"
+        - name: $select
+          in: query
+          description: Select specific fields
+          required: false
+          schema:
+            type: string
+        - name: $expand
+          in: query
+          description: Expand related entities
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  d:
+                    $ref: '#/components/schemas/SalesOrder'
+        '404':
+          description: Sales Order not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /A_SalesOrderItem:
+    get:
+      summary: Get Sales Order Items
+      description: Retrieve a list of sales order items
+      parameters:
+        - name: $filter
+          in: query
+          description: Filter criteria
+          required: false
+          schema:
+            type: string
+          example: "SalesOrder eq '2'"
+        - name: $select
+          in: query
+          description: Select specific fields
+          required: false
+          schema:
+            type: string
+        - name: $top
+          in: query
+          description: Number of records to return
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 1000
+        - name: $skip
+          in: query
+          description: Number of records to skip
+          required: false
+          schema:
+            type: integer
+            minimum: 0
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  d:
+                    type: object
+                    properties:
+                      results:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/SalesOrderItem'
+        '400':
+          description: Bad Request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /A_SalesOrder('{SalesOrder}')/to_Item:
+    get:
+      summary: Get Sales Order Items for a specific Sales Order
+      description: Retrieve items for a specific sales order
+      parameters:
+        - name: SalesOrder
+          in: path
+          required: true
+          description: Sales Order ID
+          schema:
+            type: string
+            maxLength: 10
+        - name: $select
+          in: query
+          description: Select specific fields
+          required: false
+          schema:
+            type: string
+        - name: $top
+          in: query
+          description: Number of records to return
+          required: false
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  d:
+                    type: object
+                    properties:
+                      results:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/SalesOrderItem'
+        '404':
+          description: Sales Order not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /$metadata:
+    get:
+      summary: Get Service Metadata
+      description: Retrieve the OData service metadata document
+      responses:
+        '200':
+          description: Service metadata
+          content:
+            application/xml:
+              schema:
+                type: string

@@ -1,0 +1,5 @@
+# Gitleaks ignore file for false positives
+
+# DEPLOYMENT.md contains example configuration with placeholder passwords
+# These are documentation examples, not real credentials
+DEPLOYMENT.md:*:hashicorp-tf-password

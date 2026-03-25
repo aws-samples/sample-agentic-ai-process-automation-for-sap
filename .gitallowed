@@ -1,0 +1,4 @@
+# Allow virtual environment boto3 example files (safe fake IDs)
+venv/.*examples.*\.json
+# Allow .env file (gitignored, for local development only)
+\.env

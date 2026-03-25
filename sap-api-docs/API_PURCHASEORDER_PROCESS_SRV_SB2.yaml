@@ -1,0 +1,928 @@
+openapi: 3.0.3
+info:
+  title: SAP S/4HANA Purchase Order Process API
+  description: |
+    This API provides access to purchase order processing functionality in SAP S/4HANA.
+    It allows you to create, read, update, and manage purchase orders and related entities
+    such as purchase order items, schedule lines, account assignments, and pricing elements.
+  version: "1.0.0"
+  contact:
+    name: SAP S/4HANA API Support
+  license:
+    name: SAP License
+servers:
+  - url: https://your-sap-system.com/sap/opu/odata/sap/API_PURCHASEORDER_PROCESS_SRV
+    description: SAP S/4HANA OData Service - AWS Solutions Environment
+  
+security:
+  - BasicAuth: []
+  - OAuth2: []
+
+paths:
+  /A_PurchaseOrder:
+    get:
+      summary: Get Purchase Orders
+      description: Retrieve a list of purchase orders with optional filtering, sorting, and pagination
+      operationId: getPurchaseOrders
+      parameters:
+        - $ref: '#/components/parameters/Filter'
+        - $ref: '#/components/parameters/Select'
+        - $ref: '#/components/parameters/Expand'
+        - $ref: '#/components/parameters/OrderBy'
+        - $ref: '#/components/parameters/Top'
+        - $ref: '#/components/parameters/Skip'
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  d:
+                    type: object
+                    properties:
+                      results:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/PurchaseOrder'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    post:
+      summary: Create Purchase Order
+      description: Create a new purchase order
+      operationId: createPurchaseOrder
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PurchaseOrderCreate'
+      responses:
+        '201':
+          description: Purchase order created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  d:
+                    $ref: '#/components/schemas/PurchaseOrder'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /A_PurchaseOrder('{PurchaseOrder}'):
+    get:
+      summary: Get Purchase Order by ID
+      description: Retrieve a specific purchase order by its ID
+      operationId: getPurchaseOrderById
+      parameters:
+        - name: PurchaseOrder
+          in: path
+          required: true
+          description: Purchase Order Number
+          schema:
+            type: string
+            maxLength: 10
+        - $ref: '#/components/parameters/Select'
+        - $ref: '#/components/parameters/Expand'
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  d:
+                    $ref: '#/components/schemas/PurchaseOrder'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    patch:
+      summary: Update Purchase Order
+      description: Update an existing purchase order
+      operationId: updatePurchaseOrder
+      parameters:
+        - name: PurchaseOrder
+          in: path
+          required: true
+          description: Purchase Order Number
+          schema:
+            type: string
+            maxLength: 10
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PurchaseOrderUpdate'
+      responses:
+        '204':
+          description: Purchase order updated successfully
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /A_PurchaseOrderItem:
+    get:
+      summary: Get Purchase Order Items
+      description: Retrieve a list of purchase order items
+      operationId: getPurchaseOrderItems
+      parameters:
+        - $ref: '#/components/parameters/Filter'
+        - $ref: '#/components/parameters/Select'
+        - $ref: '#/components/parameters/Expand'
+        - $ref: '#/components/parameters/OrderBy'
+        - $ref: '#/components/parameters/Top'
+        - $ref: '#/components/parameters/Skip'
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  d:
+                    type: object
+                    properties:
+                      results:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/PurchaseOrderItem'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /A_PurchaseOrderItem(PurchaseOrder='{PurchaseOrder}',PurchaseOrderItem='{PurchaseOrderItem}'):
+    get:
+      summary: Get Purchase Order Item by ID
+      description: Retrieve a specific purchase order item
+      operationId: getPurchaseOrderItemById
+      parameters:
+        - name: PurchaseOrder
+          in: path
+          required: true
+          description: Purchase Order Number
+          schema:
+            type: string
+            maxLength: 10
+        - name: PurchaseOrderItem
+          in: path
+          required: true
+          description: Purchase Order Item Number
+          schema:
+            type: string
+            maxLength: 5
+        - $ref: '#/components/parameters/Select'
+        - $ref: '#/components/parameters/Expand'
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  d:
+                    $ref: '#/components/schemas/PurchaseOrderItem'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /A_PurchaseOrderScheduleLine:
+    get:
+      summary: Get Purchase Order Schedule Lines
+      description: Retrieve purchase order schedule lines
+      operationId: getPurchaseOrderScheduleLines
+      parameters:
+        - $ref: '#/components/parameters/Filter'
+        - $ref: '#/components/parameters/Select'
+        - $ref: '#/components/parameters/Expand'
+        - $ref: '#/components/parameters/OrderBy'
+        - $ref: '#/components/parameters/Top'
+        - $ref: '#/components/parameters/Skip'
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  d:
+                    type: object
+                    properties:
+                      results:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/PurchaseOrderScheduleLine'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /A_PurOrdAccountAssignment:
+    get:
+      summary: Get Purchase Order Account Assignments
+      description: Retrieve purchase order account assignments
+      operationId: getPurchaseOrderAccountAssignments
+      parameters:
+        - $ref: '#/components/parameters/Filter'
+        - $ref: '#/components/parameters/Select'
+        - $ref: '#/components/parameters/Expand'
+        - $ref: '#/components/parameters/OrderBy'
+        - $ref: '#/components/parameters/Top'
+        - $ref: '#/components/parameters/Skip'
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  d:
+                    type: object
+                    properties:
+                      results:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/PurchaseOrderAccountAssignment'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+components:
+  securitySchemes:
+    BasicAuth:
+      type: http
+      scheme: basic
+    OAuth2:
+      type: oauth2
+      flows:
+        authorizationCode:
+          authorizationUrl: https://your-sap-system.com/oauth/authorize
+          tokenUrl: https://your-sap-system.com/oauth/token
+          scopes:
+            read: Read access to purchase orders
+            write: Write access to purchase orders
+
+  parameters:
+    Filter:
+      name: $filter
+      in: query
+      description: Filter criteria for the query
+      schema:
+        type: string
+      example: "CompanyCode eq '1000'"
+    
+    Select:
+      name: $select
+      in: query
+      description: Select specific fields
+      schema:
+        type: string
+      example: "PurchaseOrder,Supplier,PurchaseOrderDate"
+    
+    Expand:
+      name: $expand
+      in: query
+      description: Expand related entities
+      schema:
+        type: string
+      example: "to_PurchaseOrderItem"
+    
+    OrderBy:
+      name: $orderby
+      in: query
+      description: Sort order
+      schema:
+        type: string
+      example: "PurchaseOrderDate desc"
+    
+    Top:
+      name: $top
+      in: query
+      description: Number of records to return
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 1000
+      example: 50
+    
+    Skip:
+      name: $skip
+      in: query
+      description: Number of records to skip
+      schema:
+        type: integer
+        minimum: 0
+      example: 0
+
+  schemas:
+    PurchaseOrder:
+      type: object
+      properties:
+        PurchaseOrder:
+          type: string
+          maxLength: 10
+          description: Purchase Order Number
+          example: "4500000001"
+        CompanyCode:
+          type: string
+          maxLength: 4
+          description: Company Code
+          example: "1000"
+        PurchaseOrderType:
+          type: string
+          maxLength: 4
+          description: Purchasing Document Type
+          example: "NB"
+        Supplier:
+          type: string
+          maxLength: 10
+          description: Supplier Number
+          example: "0000100001"
+        PurchasingOrganization:
+          type: string
+          maxLength: 4
+          description: Purchasing Organization
+          example: "1000"
+        PurchasingGroup:
+          type: string
+          maxLength: 3
+          description: Purchasing Group
+          example: "001"
+        PurchaseOrderDate:
+          type: string
+          format: date
+          description: Purchase Order Date
+          example: "2024-01-15"
+        DocumentCurrency:
+          type: string
+          maxLength: 5
+          description: Currency Key
+          example: "USD"
+        PaymentTerms:
+          type: string
+          maxLength: 4
+          description: Terms of Payment Key
+          example: "0001"
+        CreatedByUser:
+          type: string
+          maxLength: 12
+          description: User who created the purchase order
+          readOnly: true
+        CreationDate:
+          type: string
+          format: date
+          description: Creation Date
+          readOnly: true
+        LastChangeDateTime:
+          type: string
+          format: date-time
+          description: Last Change Time Stamp
+          readOnly: true
+        Language:
+          type: string
+          maxLength: 2
+          description: Language Key
+          example: "EN"
+        IncotermsClassification:
+          type: string
+          maxLength: 3
+          description: Incoterms
+          example: "EXW"
+        IncotermsLocation1:
+          type: string
+          maxLength: 70
+          description: Incoterms Location 1
+        IncotermsLocation2:
+          type: string
+          maxLength: 70
+          description: Incoterms Location 2
+        ValidityStartDate:
+          type: string
+          format: date
+          description: Start of Validity Period
+        ValidityEndDate:
+          type: string
+          format: date
+          description: End of Validity Period
+        ExchangeRate:
+          type: string
+          maxLength: 12
+          description: Exchange Rate
+        ExchangeRateIsFixed:
+          type: boolean
+          description: Fixed Exchange Rate Indicator
+        ReleaseIsNotCompleted:
+          type: boolean
+          description: Release Not Yet Completely Effected
+          readOnly: true
+        PurchasingCompletenessStatus:
+          type: boolean
+          description: Purchase order not yet complete
+        # Navigation properties
+        to_PurchaseOrderItem:
+          type: array
+          items:
+            $ref: '#/components/schemas/PurchaseOrderItem'
+          description: Purchase Order Items
+        to_PurchaseOrderNote:
+          type: array
+          items:
+            $ref: '#/components/schemas/PurchaseOrderNote'
+          description: Purchase Order Notes
+
+    PurchaseOrderCreate:
+      type: object
+      required:
+        - PurchaseOrderType
+        - Supplier
+        - PurchasingOrganization
+        - PurchasingGroup
+        - CompanyCode
+      properties:
+        PurchaseOrderType:
+          type: string
+          maxLength: 4
+          description: Purchasing Document Type
+          example: "NB"
+        Supplier:
+          type: string
+          maxLength: 10
+          description: Supplier Number
+          example: "0000100001"
+        PurchasingOrganization:
+          type: string
+          maxLength: 4
+          description: Purchasing Organization
+          example: "1000"
+        PurchasingGroup:
+          type: string
+          maxLength: 3
+          description: Purchasing Group
+          example: "001"
+        CompanyCode:
+          type: string
+          maxLength: 4
+          description: Company Code
+          example: "1000"
+        PurchaseOrderDate:
+          type: string
+          format: date
+          description: Purchase Order Date
+        DocumentCurrency:
+          type: string
+          maxLength: 5
+          description: Currency Key
+          example: "USD"
+        PaymentTerms:
+          type: string
+          maxLength: 4
+          description: Terms of Payment Key
+        Language:
+          type: string
+          maxLength: 2
+          description: Language Key
+          example: "EN"
+        IncotermsClassification:
+          type: string
+          maxLength: 3
+          description: Incoterms
+        IncotermsLocation1:
+          type: string
+          maxLength: 70
+          description: Incoterms Location 1
+        IncotermsLocation2:
+          type: string
+          maxLength: 70
+          description: Incoterms Location 2
+        ValidityStartDate:
+          type: string
+          format: date
+          description: Start of Validity Period
+        ValidityEndDate:
+          type: string
+          format: date
+          description: End of Validity Period
+
+    PurchaseOrderUpdate:
+      type: object
+      properties:
+        PaymentTerms:
+          type: string
+          maxLength: 4
+          description: Terms of Payment Key
+        Language:
+          type: string
+          maxLength: 2
+          description: Language Key
+        IncotermsClassification:
+          type: string
+          maxLength: 3
+          description: Incoterms
+        IncotermsLocation1:
+          type: string
+          maxLength: 70
+          description: Incoterms Location 1
+        IncotermsLocation2:
+          type: string
+          maxLength: 70
+          description: Incoterms Location 2
+        ValidityStartDate:
+          type: string
+          format: date
+          description: Start of Validity Period
+        ValidityEndDate:
+          type: string
+          format: date
+          description: End of Validity Period
+        PurchasingCompletenessStatus:
+          type: boolean
+          description: Purchase order not yet complete
+
+    PurchaseOrderItem:
+      type: object
+      properties:
+        PurchaseOrder:
+          type: string
+          maxLength: 10
+          description: Purchase Order Number
+          example: "4500000001"
+        PurchaseOrderItem:
+          type: string
+          maxLength: 5
+          description: Item Number of Purchase Order
+          example: "00010"
+        PurchaseOrderItemText:
+          type: string
+          maxLength: 40
+          description: Short Text
+        Material:
+          type: string
+          maxLength: 40
+          description: Material Number
+        Plant:
+          type: string
+          maxLength: 4
+          description: Plant
+          example: "1000"
+        StorageLocation:
+          type: string
+          maxLength: 4
+          description: Storage Location
+        MaterialGroup:
+          type: string
+          maxLength: 9
+          description: Material Group
+        OrderQuantity:
+          type: number
+          format: decimal
+          description: Purchase Order Quantity
+          example: 10.000
+        PurchaseOrderQuantityUnit:
+          type: string
+          maxLength: 3
+          description: Purchase Order Unit of Measure
+          example: "EA"
+        NetPriceAmount:
+          type: number
+          format: decimal
+          description: Net Price in Document Currency
+          example: 100.000
+        NetPriceQuantity:
+          type: number
+          format: decimal
+          description: Price Unit
+          example: 1
+        DocumentCurrency:
+          type: string
+          maxLength: 5
+          description: Currency Key
+          example: "USD"
+          readOnly: true
+        TaxCode:
+          type: string
+          maxLength: 2
+          description: Tax Code
+        PurchaseOrderItemCategory:
+          type: string
+          maxLength: 1
+          description: Item category in purchasing document
+        AccountAssignmentCategory:
+          type: string
+          maxLength: 1
+          description: Account Assignment Category
+        GoodsReceiptIsExpected:
+          type: boolean
+          description: Goods Receipt Indicator
+        InvoiceIsExpected:
+          type: boolean
+          description: Invoice Receipt Indicator
+        InvoiceIsGoodsReceiptBased:
+          type: boolean
+          description: GR-Based Invoice Verification
+        IsCompletelyDelivered:
+          type: boolean
+          description: Delivery Completed Indicator
+        IsFinallyInvoiced:
+          type: boolean
+          description: Final Invoice Indicator
+        PurchaseRequisition:
+          type: string
+          maxLength: 10
+          description: Purchase Requisition Number
+        PurchaseRequisitionItem:
+          type: string
+          maxLength: 5
+          description: Item Number of Purchase Requisition
+        DeliveryAddressID:
+          type: string
+          maxLength: 10
+          description: Manual address number
+          readOnly: true
+        DeliveryAddressName:
+          type: string
+          maxLength: 40
+          description: Name 1
+        DeliveryAddressCityName:
+          type: string
+          maxLength: 40
+          description: City
+        DeliveryAddressPostalCode:
+          type: string
+          maxLength: 10
+          description: Postal Code
+        DeliveryAddressStreetName:
+          type: string
+          maxLength: 60
+          description: Street
+        DeliveryAddressCountry:
+          type: string
+          maxLength: 3
+          description: Country/Region Key
+
+    PurchaseOrderScheduleLine:
+      type: object
+      properties:
+        PurchaseOrder:
+          type: string
+          maxLength: 10
+          description: Purchase Order Number
+        PurchaseOrderItem:
+          type: string
+          maxLength: 5
+          description: Purchase Order Item Number
+        ScheduleLine:
+          type: string
+          maxLength: 4
+          description: Schedule Line Number
+        DeliveryDate:
+          type: string
+          format: date
+          description: Delivery Date
+        ScheduleLineOrderQuantity:
+          type: number
+          format: decimal
+          description: Schedule Line Order Quantity
+        PurchaseOrderQuantityUnit:
+          type: string
+          maxLength: 3
+          description: Purchase Order Unit of Measure
+        ScheduleLineDeliveryDate:
+          type: string
+          format: date
+          description: Schedule Line Delivery Date
+        PerformancePeriodStartDate:
+          type: string
+          format: date
+          description: Performance Period Start Date
+        PerformancePeriodEndDate:
+          type: string
+          format: date
+          description: Performance Period End Date
+
+    PurchaseOrderAccountAssignment:
+      type: object
+      properties:
+        PurchaseOrder:
+          type: string
+          maxLength: 10
+          description: Purchase Order Number
+        PurchaseOrderItem:
+          type: string
+          maxLength: 5
+          description: Purchase Order Item Number
+        AccountAssignmentNumber:
+          type: string
+          maxLength: 2
+          description: Sequential Number of Account Assignment
+        Quantity:
+          type: number
+          format: decimal
+          description: Quantity
+        MultipleAcctAssgmtDistribution:
+          type: string
+          maxLength: 1
+          description: Distribution Indicator for Multiple Account Assignment
+        CostCenter:
+          type: string
+          maxLength: 10
+          description: Cost Center
+        GLAccount:
+          type: string
+          maxLength: 10
+          description: G/L Account Number
+        BusinessArea:
+          type: string
+          maxLength: 4
+          description: Business Area
+        SalesOrder:
+          type: string
+          maxLength: 10
+          description: Sales Order Number
+        SalesOrderItem:
+          type: string
+          maxLength: 6
+          description: Sales Order Item
+        SalesOrderScheduleLine:
+          type: string
+          maxLength: 4
+          description: Sales Order Schedule Line
+        MasterFixedAsset:
+          type: string
+          maxLength: 12
+          description: Main Asset Number
+        FixedAsset:
+          type: string
+          maxLength: 4
+          description: Asset Subnumber
+        ProjectNetwork:
+          type: string
+          maxLength: 12
+          description: Network Number
+        NetworkActivity:
+          type: string
+          maxLength: 4
+          description: Network Activity
+        GoodsRecipientName:
+          type: string
+          maxLength: 12
+          description: Goods Recipient
+        UnloadingPointName:
+          type: string
+          maxLength: 25
+          description: Unloading Point
+        ControllingArea:
+          type: string
+          maxLength: 4
+          description: Controlling Area
+        CostObject:
+          type: string
+          maxLength: 12
+          description: Cost Object
+        ProfitCenter:
+          type: string
+          maxLength: 10
+          description: Profit Center
+        WBSElement:
+          type: string
+          maxLength: 24
+          description: WBS Element
+        ProjectNetworkInternalID:
+          type: string
+          maxLength: 10
+          description: Project Network Internal ID
+
+    PurchaseOrderNote:
+      type: object
+      properties:
+        PurchaseOrder:
+          type: string
+          maxLength: 10
+          description: Purchase Order Number
+        TextObjectType:
+          type: string
+          maxLength: 4
+          description: Text Object Type
+        Language:
+          type: string
+          maxLength: 2
+          description: Language Key
+        PlainLongText:
+          type: string
+          description: Plain Long Text
+
+    Error:
+      type: object
+      properties:
+        error:
+          type: object
+          properties:
+            code:
+              type: string
+              description: Error code
+            message:
+              type: object
+              properties:
+                lang:
+                  type: string
+                  description: Language of the error message
+                value:
+                  type: string
+                  description: Error message text
+            innererror:
+              type: object
+              properties:
+                application:
+                  type: object
+                  properties:
+                    component_id:
+                      type: string
+                    service_namespace:
+                      type: string
+                    service_id:
+                      type: string
+                    service_version:
+                      type: string
+                transactionid:
+                  type: string
+                timestamp:
+                  type: string
+                Error_Resolution:
+                  type: object
+                  properties:
+                    SAP_Transaction:
+                      type: string
+                    SAP_Note:
+                      type: string
+
+  responses:
+    BadRequest:
+      description: Bad Request - Invalid request parameters
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    
+    Unauthorized:
+      description: Unauthorized - Authentication required
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    
+    NotFound:
+      description: Not Found - Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    
+    InternalServerError:
+      description: Internal Server Error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+tags:
+  - name: Purchase Orders
+    description: Operations related to purchase orders
+  - name: Purchase Order Items
+    description: Operations related to purchase order items
+  - name: Schedule Lines
+    description: Operations related to purchase order schedule lines
+  - name: Account Assignments
+    description: Operations related to purchase order account assignments

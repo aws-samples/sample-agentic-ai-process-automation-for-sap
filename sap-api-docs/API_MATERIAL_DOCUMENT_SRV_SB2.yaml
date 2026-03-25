@@ -1,0 +1,843 @@
+openapi: 3.0.0
+info:
+  title: SAP Material Document API
+  description: SAP OData service for managing material documents, including header data, line items, and serial numbers for inventory management
+  version: 1.0.0
+  contact:
+    name: SAP API Support
+    url: https://help.sap.com
+
+servers:
+  - url: https://your-sap-system.com/sap/opu/odata/sap/API_MATERIAL_DOCUMENT_SRV
+    description: SAP Production Server
+
+security:
+  - basicAuth: []
+
+components:
+  securitySchemes:
+    basicAuth:
+      type: http
+      scheme: basic
+      description: SAP username and password
+
+  schemas:
+    MaterialDocumentHeader:
+      type: object
+      properties:
+        MaterialDocumentYear:
+          type: string
+          maxLength: 4
+          description: Material Document Year
+        MaterialDocument:
+          type: string
+          maxLength: 10
+          description: Number of Material Document
+        InventoryTransactionType:
+          type: string
+          maxLength: 2
+          description: Transaction/Event Type
+        DocumentDate:
+          type: string
+          format: date
+          description: Document Date in Document
+        PostingDate:
+          type: string
+          format: date
+          description: Posting Date in the Document
+        CreationDate:
+          type: string
+          format: date
+          description: Day On Which Accounting Document Was Entered
+        CreationTime:
+          type: string
+          format: time
+          description: Time of Entry
+        CreatedByUser:
+          type: string
+          maxLength: 12
+          description: User Name
+        MaterialDocumentHeaderText:
+          type: string
+          maxLength: 25
+          description: Document Header Text
+        ReferenceDocument:
+          type: string
+          maxLength: 16
+          description: Reference Document Number
+        VersionForPrintingSlip:
+          type: string
+          maxLength: 1
+          description: Version for Printing GR/GI Slip
+        ManualPrintIsTriggered:
+          type: string
+          maxLength: 1
+          description: Print via Output Control
+        CtrlPostgForExtWhseMgmtSyst:
+          type: string
+          maxLength: 1
+          description: Control posting for external WMS
+        GoodsMovementCode:
+          type: string
+          maxLength: 2
+          description: Goods Movement Code
+
+    MaterialDocumentItem:
+      type: object
+      properties:
+        MaterialDocumentYear:
+          type: string
+          maxLength: 4
+          description: Material Document Year
+        MaterialDocument:
+          type: string
+          maxLength: 10
+          description: Number of Material Document
+        MaterialDocumentItem:
+          type: string
+          maxLength: 4
+          description: Material Document Item
+        Material:
+          type: string
+          maxLength: 40
+          description: Material Number
+        Plant:
+          type: string
+          maxLength: 4
+          description: Plant
+        StorageLocation:
+          type: string
+          maxLength: 4
+          description: Storage Location
+        Batch:
+          type: string
+          maxLength: 10
+          description: Batch Number
+        GoodsMovementType:
+          type: string
+          maxLength: 3
+          description: Movement Type (Inventory Management)
+        InventoryStockType:
+          type: string
+          maxLength: 2
+          description: Stock Type of Goods Movement (Stock Identifier)
+        InventoryValuationType:
+          type: string
+          maxLength: 10
+          description: Valuation Type
+        InventorySpecialStockType:
+          type: string
+          maxLength: 1
+          description: Special Stock Type
+        Supplier:
+          type: string
+          maxLength: 10
+          description: Supplier's Account Number
+        Customer:
+          type: string
+          maxLength: 10
+          description: Account number of customer
+        SalesOrder:
+          type: string
+          maxLength: 10
+          description: Sales Order Number
+        SalesOrderItem:
+          type: string
+          maxLength: 6
+          description: Sales Order Item
+        SalesOrderScheduleLine:
+          type: string
+          maxLength: 4
+          description: Sales Order Schedule
+        PurchaseOrder:
+          type: string
+          maxLength: 10
+          description: Purchase order number
+        PurchaseOrderItem:
+          type: string
+          maxLength: 5
+          description: Item Number of Purchasing Document
+        WBSElement:
+          type: string
+          maxLength: 24
+          description: Work Breakdown Structure Element (WBS Element)
+        ManufacturingOrder:
+          type: string
+          maxLength: 12
+          description: Manufacturing Order
+        ManufacturingOrderItem:
+          type: string
+          maxLength: 4
+          description: Manufacturing Order Item
+        GoodsMovementRefDocType:
+          type: string
+          maxLength: 1
+          description: Goods movement ref doc type
+        GoodsMovementReasonCode:
+          type: string
+          maxLength: 4
+          description: Reason for Movement
+        Delivery:
+          type: string
+          maxLength: 10
+          description: Delivery
+        DeliveryItem:
+          type: string
+          maxLength: 6
+          description: Delivery Item
+        AccountAssignmentCategory:
+          type: string
+          maxLength: 1
+          description: Account Assignment Category
+        CostCenter:
+          type: string
+          maxLength: 10
+          description: Cost Center
+        ControllingArea:
+          type: string
+          maxLength: 4
+          description: Controlling Area
+        CostObject:
+          type: string
+          maxLength: 12
+          description: Cost Object
+        GLAccount:
+          type: string
+          maxLength: 10
+          description: G/L Account Number
+        FunctionalArea:
+          type: string
+          maxLength: 16
+          description: Functional Area
+        ProfitabilitySegment:
+          type: string
+          maxLength: 10
+          description: Profitability Segment
+        ProfitCenter:
+          type: string
+          maxLength: 10
+          description: Profit Center
+        MasterFixedAsset:
+          type: string
+          maxLength: 12
+          description: Main Asset Number
+        FixedAsset:
+          type: string
+          maxLength: 4
+          description: Asset Subnumber
+        MaterialBaseUnit:
+          type: string
+          maxLength: 3
+          description: Base Unit of Measure
+        QuantityInBaseUnit:
+          type: number
+          format: decimal
+          description: Quantity
+        EntryUnit:
+          type: string
+          maxLength: 3
+          description: Unit of entry
+        QuantityInEntryUnit:
+          type: number
+          format: decimal
+          description: Quantity in unit of entry
+        CompanyCodeCurrency:
+          type: string
+          maxLength: 5
+          description: Company Code Currency
+        GdsMvtExtAmtInCoCodeCrcy:
+          type: number
+          format: decimal
+          description: Externally Entered Posting Amount in Local Currency
+        SlsPrcAmtInclVATInCoCodeCrcy:
+          type: number
+          format: decimal
+          description: Value at Sales Prices Including Value-Added Tax
+        FiscalYear:
+          type: string
+          maxLength: 4
+          description: Fiscal Year
+        FiscalYearPeriod:
+          type: string
+          maxLength: 7
+          description: Period Year
+        FiscalYearVariant:
+          type: string
+          maxLength: 2
+          description: Fiscal Year Variant
+        IssgOrRcvgMaterial:
+          type: string
+          maxLength: 40
+          description: Transfer Material
+        IssgOrRcvgBatch:
+          type: string
+          maxLength: 10
+          description: Transfer Batch
+        IssuingOrReceivingPlant:
+          type: string
+          maxLength: 4
+          description: Receiving/Issuing Plant
+        IssuingOrReceivingStorageLoc:
+          type: string
+          maxLength: 4
+          description: Receiving/issuing storage location
+        IssuingOrReceivingStockType:
+          type: string
+          maxLength: 2
+          description: Transfer Stock Type
+        IssgOrRcvgSpclStockInd:
+          type: string
+          maxLength: 1
+          description: Transfer Special Stock Type
+        IssuingOrReceivingValType:
+          type: string
+          maxLength: 10
+          description: Valuation Type of Transfer Batch
+        IsCompletelyDelivered:
+          type: boolean
+          description: "Delivery Completed" Indicator
+        MaterialDocumentItemText:
+          type: string
+          maxLength: 50
+          description: Item Text
+        GoodsRecipientName:
+          type: string
+          maxLength: 12
+          description: Goods Recipient
+        UnloadingPointName:
+          type: string
+          maxLength: 25
+          description: Unloading Point
+        ShelfLifeExpirationDate:
+          type: string
+          format: date
+          description: Shelf Life Expiration or Best-Before Date
+        ManufactureDate:
+          type: string
+          format: date
+          description: Date of Manufacture
+        SerialNumbersAreCreatedAutomly:
+          type: boolean
+          description: Create serial number automatically
+        Reservation:
+          type: string
+          maxLength: 10
+          description: Number of reservation/dependent requirements
+        ReservationItem:
+          type: string
+          maxLength: 4
+          description: Item Number of Reservation / Dependent Requirements
+        ReservationIsFinallyIssued:
+          type: boolean
+          description: Final Issue for Reservation
+        SpecialStockIdfgSalesOrder:
+          type: string
+          maxLength: 10
+          description: Sales order number of valuated sales order stock
+        SpecialStockIdfgSalesOrderItem:
+          type: string
+          maxLength: 6
+          description: Sales Order Item of Valuated Sales Order Stock
+        SpecialStockIdfgWBSElement:
+          type: string
+          maxLength: 24
+          description: Work Breakdown Structure Element (WBS Element)
+        IsAutomaticallyCreated:
+          type: string
+          maxLength: 1
+          description: Item Automatically Created Indicator
+        MaterialDocumentLine:
+          type: string
+          maxLength: 6
+          description: Unique Identification of Document Line
+        MaterialDocumentParentLine:
+          type: string
+          maxLength: 6
+          description: Identifier of immediately superior line
+        HierarchyNodeLevel:
+          type: string
+          maxLength: 2
+          description: Hierarchy level of line in document
+        GoodsMovementIsCancelled:
+          type: boolean
+          description: Item has been Cancelled
+        ReversedMaterialDocumentYear:
+          type: string
+          maxLength: 4
+          description: Reversed Material Document Year
+        ReversedMaterialDocument:
+          type: string
+          maxLength: 10
+          description: Reversed Material Document
+        ReversedMaterialDocumentItem:
+          type: string
+          maxLength: 4
+          description: Reversed Material Document Item
+        ReferenceDocumentFiscalYear:
+          type: string
+          maxLength: 4
+          description: Fiscal Year of a Reference Document
+        InvtryMgmtRefDocumentItem:
+          type: string
+          maxLength: 4
+          description: Item of a Reference Document
+        InvtryMgmtReferenceDocument:
+          type: string
+          maxLength: 10
+          description: Document No. of a Reference Document
+        MaterialDocumentPostingType:
+          type: string
+          maxLength: 1
+          description: Reversal, return delivery, or transfer posting
+        InventoryUsabilityCode:
+          type: string
+          maxLength: 1
+          description: Posting Control Stock Type
+        EWMWarehouse:
+          type: string
+          maxLength: 4
+          description: Warehouse Number/Warehouse Complex
+        EWMStorageBin:
+          type: string
+          maxLength: 18
+          description: Storage Bin
+        DebitCreditCode:
+          type: string
+          maxLength: 1
+          description: Debit/Credit Indicator
+        StockSegment:
+          type: string
+          maxLength: 40
+          description: Stock Segment
+        IssgOrRcvgStockSegment:
+          type: string
+          maxLength: 40
+          description: Receiving/Issuing Stock Segment
+
+    SerialNumberMaterialDocument:
+      type: object
+      properties:
+        Material:
+          type: string
+          maxLength: 40
+          description: Material Number
+        SerialNumber:
+          type: string
+          maxLength: 18
+          description: Serial Number
+        MaterialDocument:
+          type: string
+          maxLength: 10
+          description: Number of Material Document
+        MaterialDocumentItem:
+          type: string
+          maxLength: 4
+          description: Material Document Item
+        MaterialDocumentYear:
+          type: string
+          maxLength: 4
+          description: Material Document Year
+        ManufacturerSerialNumber:
+          type: string
+          maxLength: 30
+          description: Manufacturer's Serial Number
+
+    ODataCollection:
+      type: object
+      properties:
+        d:
+          type: object
+          properties:
+            results:
+              type: array
+              items:
+                oneOf:
+                  - $ref: '#/components/schemas/MaterialDocumentHeader'
+                  - $ref: '#/components/schemas/MaterialDocumentItem'
+                  - $ref: '#/components/schemas/SerialNumberMaterialDocument'
+
+    ODataSingle:
+      type: object
+      properties:
+        d:
+          oneOf:
+            - $ref: '#/components/schemas/MaterialDocumentHeader'
+            - $ref: '#/components/schemas/MaterialDocumentItem'
+            - $ref: '#/components/schemas/SerialNumberMaterialDocument'
+
+paths:
+  /A_MaterialDocumentHeader:
+    get:
+      summary: Get all material document headers
+      description: Reads material document header information to get an overview of the material document postings
+      security:
+        - basicAuth: []
+      parameters:
+        - name: $filter
+          in: query
+          schema:
+            type: string
+          description: Filter expression
+          example: "MaterialDocumentYear eq '2024'"
+        - name: $select
+          in: query
+          schema:
+            type: string
+          description: Select specific fields
+          example: "MaterialDocument,MaterialDocumentYear,DocumentDate"
+        - name: $expand
+          in: query
+          schema:
+            type: string
+          description: Expand related entities
+          example: "to_MaterialDocumentItem"
+        - name: $top
+          in: query
+          schema:
+            type: integer
+          description: Number of records to return
+          example: 50
+        - name: $skip
+          in: query
+          schema:
+            type: integer
+          description: Number of records to skip
+          example: 0
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ODataCollection'
+        '401':
+          description: Unauthorized
+        '500':
+          description: Server Error
+
+    post:
+      summary: Create a material document
+      description: Creates a material document composed by header and item for a specific business process
+      security:
+        - basicAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MaterialDocumentHeader'
+            examples:
+              movementType101:
+                summary: "Movement Type 101 - Goods Receipt"
+                description: "Example for movement type 101 with PO reference using GoodsMovementRefDocType"
+                value:
+                  GoodsMovementCode: "01"
+                  DocumentDate: "/Date(1730304000000)/"
+                  PostingDate: "/Date(1730304000000)/"
+                  MaterialDocumentHeaderText: "GR Invoice 5100001413 OK"
+                  to_MaterialDocumentItem:
+                    results:
+                      - Material: "FG111"
+                        Plant: "1710"
+                        StorageLocation: "171A"
+                        GoodsMovementType: "101"
+                        PurchaseOrder: "4500001906"
+                        PurchaseOrderItem: "10"
+                        GoodsMovementRefDocType: "B"
+                        QuantityInEntryUnit: "1500"
+                        EntryUnit: "PC"
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ODataSingle'
+        '400':
+          description: Bad Request
+        '401':
+          description: Unauthorized
+
+  /A_MaterialDocumentHeader(MaterialDocumentYear='{MaterialDocumentYear}',MaterialDocument='{MaterialDocument}'):
+    get:
+      summary: Get material document header by key
+      description: Reads material document header information for a specific material document to get an overview of the material document posting
+      security:
+        - basicAuth: []
+      parameters:
+        - name: MaterialDocumentYear
+          in: path
+          required: true
+          schema:
+            type: string
+            maxLength: 4
+          description: Material Document Year
+        - name: MaterialDocument
+          in: path
+          required: true
+          schema:
+            type: string
+            maxLength: 10
+          description: Number of Material Document
+        - name: $expand
+          in: query
+          schema:
+            type: string
+          description: Expand related entities
+          example: "to_MaterialDocumentItem"
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ODataSingle'
+        '404':
+          description: Not Found
+        '401':
+          description: Unauthorized
+
+  /A_MaterialDocumentItem:
+    get:
+      summary: Get all material document items
+      description: Reads material document items information to get an overview of the material document postings
+      security:
+        - basicAuth: []
+      parameters:
+        - name: $filter
+          in: query
+          schema:
+            type: string
+          description: Filter expression
+          example: "MaterialDocument eq '4900000001'"
+        - name: $expand
+          in: query
+          schema:
+            type: string
+          description: Expand related entities
+          example: "to_MaterialDocumentHeader,to_SerialNumbers"
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ODataCollection'
+        '401':
+          description: Unauthorized
+
+  /A_MaterialDocumentItem(MaterialDocumentYear='{MaterialDocumentYear}',MaterialDocument='{MaterialDocument}',MaterialDocumentItem='{MaterialDocumentItem}'):
+    get:
+      summary: Get material document item by key
+      description: Reads material document items information for a specific material document and year to get an overview of the material document postings
+      security:
+        - basicAuth: []
+      parameters:
+        - name: MaterialDocumentYear
+          in: path
+          required: true
+          schema:
+            type: string
+            maxLength: 4
+          description: Material Document Year
+        - name: MaterialDocument
+          in: path
+          required: true
+          schema:
+            type: string
+            maxLength: 10
+          description: Number of Material Document
+        - name: MaterialDocumentItem
+          in: path
+          required: true
+          schema:
+            type: string
+            maxLength: 4
+          description: Material Document Item
+        - name: $expand
+          in: query
+          schema:
+            type: string
+          description: Expand related entities
+          example: "to_MaterialDocumentHeader,to_SerialNumbers"
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ODataSingle'
+        '404':
+          description: Not Found
+
+  /A_SerialNumberMaterialDocument:
+    get:
+      summary: Get serial numbers for material documents
+      description: Reads information of serial numbers of material document items to get an overview of the posted serial numbers
+      security:
+        - basicAuth: []
+      parameters:
+        - name: $filter
+          in: query
+          schema:
+            type: string
+          description: Filter expression
+          example: "MaterialDocument eq '4900000001'"
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ODataCollection'
+
+  /A_SerialNumberMaterialDocument(Material='{Material}',SerialNumber='{SerialNumber}',MaterialDocument='{MaterialDocument}',MaterialDocumentItem='{MaterialDocumentItem}',MaterialDocumentYear='{MaterialDocumentYear}'):
+    get:
+      summary: Get serial number by key
+      description: Reads information of serial number of a specific material document, item, year and material to get an overview of the posted serial numbers
+      security:
+        - basicAuth: []
+      parameters:
+        - name: Material
+          in: path
+          required: true
+          schema:
+            type: string
+            maxLength: 40
+          description: Material Number
+        - name: SerialNumber
+          in: path
+          required: true
+          schema:
+            type: string
+            maxLength: 18
+          description: Serial Number
+        - name: MaterialDocument
+          in: path
+          required: true
+          schema:
+            type: string
+            maxLength: 10
+          description: Number of Material Document
+        - name: MaterialDocumentItem
+          in: path
+          required: true
+          schema:
+            type: string
+            maxLength: 4
+          description: Material Document Item
+        - name: MaterialDocumentYear
+          in: path
+          required: true
+          schema:
+            type: string
+            maxLength: 4
+          description: Material Document Year
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ODataSingle'
+        '404':
+          description: Not Found
+
+  /Cancel:
+    post:
+      summary: Cancel material document
+      description: Cancels a complete material document that you specify by the material document number and year
+      security:
+        - basicAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                MaterialDocumentYear:
+                  type: string
+                  maxLength: 4
+                  description: Material Doc. Year
+                MaterialDocument:
+                  type: string
+                  maxLength: 10
+                  description: Material Document
+                PostingDate:
+                  type: string
+                  format: date-time
+                  description: Posting Date
+              required:
+                - MaterialDocumentYear
+                - MaterialDocument
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ODataSingle'
+        '400':
+          description: Bad Request
+        '401':
+          description: Unauthorized
+
+  /CancelItem:
+    post:
+      summary: Cancel material document item
+      description: Cancels a material document item that you specify by the material document number, year and item number
+      security:
+        - basicAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                MaterialDocumentYear:
+                  type: string
+                  maxLength: 4
+                  description: Material Doc. Year
+                MaterialDocument:
+                  type: string
+                  maxLength: 10
+                  description: Material Document
+                MaterialDocumentItem:
+                  type: string
+                  maxLength: 4
+                  description: Material Doc.Item
+                PostingDate:
+                  type: string
+                  format: date-time
+                  description: Posting Date
+              required:
+                - MaterialDocumentYear
+                - MaterialDocument
+                - MaterialDocumentItem
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ODataSingle'
+        '400':
+          description: Bad Request
+        '401':
+          description: Unauthorized
+
+  /$metadata:
+    get:
+      summary: Get service metadata
+      description: Returns the OData service metadata document
+      security:
+        - basicAuth: []
+      responses:
+        '200':
+          description: Metadata XML
+          content:
+            application/xml:
+              schema:
+                type: string

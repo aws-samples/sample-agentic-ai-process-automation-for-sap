@@ -1,0 +1,61 @@
+# Environment variables
+.env
+
+# Security documentation (internal use only)
+SECURITY.md
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual environments
+venv/
+test_venv/
+env/
+ENV/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Logs
+*.log
+streamlit.log
+
+# Temporary files
+*.tmp
+*.temp
+
+# AWS
+.aws/
+
+# Streamlit
+.streamlit/
+
+# Bedrock AgentCore (contains account-specific info)
+.bedrock_agentcore.yaml
