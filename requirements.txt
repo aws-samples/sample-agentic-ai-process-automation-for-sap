@@ -13,7 +13,7 @@ uv
 fastmcp
 requests
 mcp
-werkzeug==3.1.1
+werkzeug==3.1.6
 
 # Web framework dependencies
 fastapi
