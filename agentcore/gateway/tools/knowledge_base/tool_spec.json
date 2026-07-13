@@ -1,0 +1,30 @@
+[
+  {
+    "name": "search_sap_sops",
+    "description": "Search the SAP Standard Operating Procedures Knowledge Base for exception-processing guidance including decision trees, thresholds, matching/validation methodology, and error handling.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "query": {
+          "type": "string",
+          "description": "Search query describing what SOP guidance you need"
+        }
+      },
+      "required": ["query"]
+    }
+  },
+  {
+    "name": "search_sap_api_docs",
+    "description": "Search the SAP API Documentation Knowledge Base for OData API specifications, endpoints, field descriptions, and example calls.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "query": {
+          "type": "string",
+          "description": "Search query for API information"
+        }
+      },
+      "required": ["query"]
+    }
+  }
+]

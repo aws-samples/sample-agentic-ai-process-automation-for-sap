@@ -1,0 +1,40 @@
+{
+  "domain": "finance_ap",
+  "label": "AP Invoice Exceptions",
+  "service": "API_SUPPLIERINVOICE_PROCESS_SRV",
+  "entity": "A_SupplierInvoice",
+  "filter": "PaymentBlockingReason ne ''",
+  "expand": "to_SuplrInvcItemPurOrdRef",
+  "select": "SupplierInvoice,FiscalYear,CompanyCode,DocumentDate,PostingDate,InvoicingParty,InvoiceGrossAmount,DocumentCurrency,PaymentBlockingReason,SupplierInvoiceIDByInvcgParty",
+
+  "iterate": {
+    "path": "to_SuplrInvcItemPurOrdRef",
+    "allow_empty_children": true,
+    "document_number": { "source": "parent", "field": "SupplierInvoice", "strip": true },
+    "item_id": { "source": "parent", "field": "FiscalYear", "strip": true, "fallback": "0001" }
+  },
+
+  "skip_when": [
+    { "field": "SupplierInvoice", "op": "blank", "scope": "parent" }
+  ],
+
+  "process_type": {
+    "default": "invoice_matching"
+  },
+
+  "title": "Invoice {parent.SupplierInvoice} / FY {parent.FiscalYear} — Block: {parent.PaymentBlockingReason} ({parent.DocumentCurrency} {abs_amount})",
+
+  "field_map": {
+    "supplier_number":    { "path": "parent.InvoicingParty" },
+    "amount":             { "path": "parent.InvoiceGrossAmount", "cast": "abs_decimal" },
+    "currency":           { "path": "parent.DocumentCurrency" },
+    "exception_type":     { "path": "parent.PaymentBlockingReason" },
+    "company_code":       { "path": "parent.CompanyCode" },
+    "document_date":      { "path": "parent.DocumentDate", "cast": "sap_date" },
+    "posting_date":       { "path": "parent.PostingDate", "cast": "sap_date" },
+    "external_reference": { "path": "parent.SupplierInvoiceIDByInvcgParty" },
+    "purchase_order":     { "path": "child.PurchaseOrder", "strip": true, "omit_blank": true },
+    "po_line_item":       { "path": "child.PurchaseOrderItem", "strip": true, "omit_blank": true },
+    "invoice_quantity":   { "path": "child.QuantityInPurchaseOrderUnit", "cast": "abs_decimal", "omit_blank": true }
+  }
+}

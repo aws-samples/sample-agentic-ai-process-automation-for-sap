@@ -1,0 +1,54 @@
+# Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+# This file is only used for the mkdocs documentation hosting webpage
+nav:
+  - Overview: README.md
+  - Getting Started:
+    - Architecture: getting-started/ARCHITECTURE.md
+    - Deployment: getting-started/DEPLOYMENT.md
+    - Terraform Deployment: getting-started/TERRAFORM_DEPLOYMENT.md
+    - Local Development: getting-started/LOCAL_DEVELOPMENT.md
+    - Contributing: getting-started/CONTRIBUTING.md
+  - SAP Integration:
+    - Overview: sap/README.md
+    - Auth Profile Selection: sap/AUTH_PROFILE_SELECTION.md
+    - Connectivity & Auth: sap/CONNECTIVITY_AND_AUTH.md
+    - Token Mechanics: sap/TOKEN_MECHANICS.md
+    - SAP Setup: sap/SAP_SETUP.md
+    - SAP System Configuration: sap/SAP_SYSTEM_CONFIGURATION.md
+    - SAP MCP Integration: sap/SAP_MCP_INTEGRATION.md
+    - SAP MCP User Federation: sap/SAP_MCP_USER_FEDERATION.md
+    - SAP MCP Same-Sub Federation: sap/SAP_MCP_SAME_SUB_FEDERATION.md
+    - BTP Hosting: sap/BTP_HOSTING.md
+    - Okta Setup: sap/OKTA_SETUP.md
+    - Operator Runbooks:
+      - Overview: sap/runbooks/README.md
+      - SOIDC / Entra OBO: sap/runbooks/soidc-entra-obo.md
+      - M2M OAuth2 (SAP): sap/runbooks/m2m-oauth2-sap.md
+      - User Federation (OIDC): sap/runbooks/uf-oidc.md
+      - User Federation (SAML): sap/runbooks/uf-saml.md
+      - User Federation (OAuth2-SAP): sap/runbooks/uf-oauth2-sap.md
+  - Agent Internals:
+    - Agent Configuration: agent/AGENT_CONFIGURATION.md
+    - Gateway: agent/GATEWAY.md
+    - Runtime & Gateway Auth: agent/RUNTIME_GATEWAY_AUTH.md
+    - Memory Integration: agent/MEMORY_INTEGRATION.md
+    - Streaming: agent/STREAMING.md
+  - Security:
+    - Input Sanitization: security/INPUT_SANITIZATION.md
+    - Webhook Verification: security/WEBHOOK_VERIFICATION.md
+    - Autonomy Controls: security/AUTONOMY_CONTROLS.md
+  - Extending:
+    - Adding Use Cases: extending/ADDING_USE_CASES.md
+    - Adding Skills: extending/ADDING_SKILLS.md
+    - Adding Gateway Tools: extending/ADDING_GATEWAY_TOOLS.md
+  - Evaluations:
+    - Quick Start: evaluations/EVALUATIONS_QUICKSTART.md
+    - Cost Benchmark: evaluations/COST_BENCHMARK.md
+    - Inference Cost Optimization: evaluations/INFERENCE_COST_OPTIMIZATION.md
+    - Full Guide: evaluations/AGENTCORE_EVALUATIONS_GUIDE.md
+  - Design Decisions:
+    - "*"
+  - Comparison Docs:
+    - "*"

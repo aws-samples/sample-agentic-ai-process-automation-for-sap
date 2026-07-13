@@ -1,0 +1,93 @@
+/* Observability dashboard animation keyframes */
+/* Used by useStaggeredEntrance hook and observability components */
+
+/* Card / row entrance: fade in while sliding up 12px */
+@keyframes fadeSlideUp {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* SVG line drawing: animate stroke-dashoffset to 0 */
+@keyframes drawLine {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+/* Bar growth: scale from 0 to full height (use with transform-origin: bottom) */
+@keyframes growBar {
+  from {
+    transform: scaleY(0);
+  }
+  to {
+    transform: scaleY(1);
+  }
+}
+
+/* Horizontal bar growth: scale from 0 to full width (use with transform-origin: left) */
+@keyframes growBarHorizontal {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+
+/* Gradient fill fade-in (used after sparkline line draw completes) */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* Progress bar shimmer for refresh indicator */
+@keyframes progressShimmer {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(200%);
+  }
+}
+
+/* Brief flash for timestamp update */
+@keyframes flashHighlight {
+  0% {
+    background-color: rgba(59, 130, 246, 0.3);
+  }
+  100% {
+    background-color: transparent;
+  }
+}
+
+/* Queue row flash when depth increases */
+@keyframes queueFlash {
+  0% {
+    background-color: rgba(245, 158, 11, 0.15);
+  }
+  100% {
+    background-color: transparent;
+  }
+}
+
+/* Respect user preference for reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    animation-delay: 0ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}

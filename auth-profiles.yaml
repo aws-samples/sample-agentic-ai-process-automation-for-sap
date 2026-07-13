@@ -1,0 +1,53 @@
+# Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+# SPDX-License-Identifier: Apache-2.0
+#
+# Single source of truth for pluggable auth profiles. Both the IaC backends and the
+# Python validator (agentcore/agent/utils/auth_profiles.py) read this file.
+#
+# maturity: ga | preview | experimental — breadth of hardening. A profile's maturity
+#   is the weakest of its selected axis values.
+# status:   stub = not verified end-to-end. The model + validation exist, and the
+#   runtime may be fully wired, but the flow is unproven against a live system.
+#   Absent = proven. Drives the profiles vs preview_profiles split below.
+# iac_module: present only on axis values that need a dedicated build step — today just
+#   mode/batch-runner (a net-new runtime). Every other value rides shared infra (the SAP
+#   MCP adapter + emitted auth artifact), so there is no per-axis module.
+axes:
+  frontend:
+    cognito:            { maturity: ga }
+    cognito+federated:  { maturity: preview,      issuer: cognito, status: stub }  # deploys as cognito; brokered federation unproven, and OBO impossible by design (JWT issuer stays Cognito)
+    direct-entra:       { maturity: preview,      issuer: entra }  # verified E2E via the entra-obo profile
+    direct-okta:        { maturity: experimental, issuer: okta,  status: stub }
+  inbound:
+    cognito:            { maturity: ga,           issuer: cognito }
+    entra:              { maturity: preview,      issuer: entra }  # verified E2E via the entra-obo profile
+    okta:               { maturity: preview,      issuer: okta,  status: stub }
+  mode:
+    autonomous:         { maturity: ga,           requires_refresh: false }
+    live:               { maturity: ga,           requires_refresh: false }
+    batch:              { maturity: experimental, requires_refresh: true, iac_module: mode/batch-runner, status: stub }  # iac_module presence drives batch-runner provisioning (run_emit._mode_block)
+  outbound:
+    basic:              { maturity: ga,           mcp_oauth_flow: BASIC }
+    m2m-sap:            { maturity: ga,           mcp_oauth_flow: M2M,             issuer: sap }
+    m2m-oidc:           { maturity: preview,      mcp_oauth_flow: M2M,             status: stub }
+    user-federation:    { maturity: preview,      mcp_oauth_flow: USER_FEDERATION, supports_refresh: true, status: stub }  # E2E verification is blocked on an unresolved issue in AgentCore Identity's 3LO token vault (see docs/sap/SAP_MCP_USER_FEDERATION.md).
+    obo:                { maturity: preview,      mcp_oauth_flow: ON_BEHALF_OF_TOKEN_EXCHANGE, mcp_supported: false, obo_direct_mcp: true, issuer: entra }  # verified E2E via the entra-obo profile
+    obo-okta:           { maturity: experimental, mcp_oauth_flow: ON_BEHALF_OF_TOKEN_EXCHANGE, mcp_supported: false, obo_direct_mcp: true, issuer: okta,  status: stub }
+
+# profiles         = deployable today; every selected axis value is proven (no stub).
+# preview_profiles = valid, resolvable topologies with >=1 unproven (stub) axis. They
+#                    validate but are not yet proven E2E. Promote a profile up when its
+#                    stub axes clear. resolve_profile() accepts a name from either block.
+profiles:
+  cognito-basic:        { frontend: cognito, inbound: cognito, mode: [autonomous, live], outbound: basic }      # DEFAULT
+  cognito-m2m:          { frontend: cognito, inbound: cognito, mode: [autonomous, live], outbound: m2m-sap }
+  entra-obo:            { frontend: direct-entra,      inbound: entra,   mode: [live],        outbound: obo, verified: true }  # verified E2E (S/4HANA 2023, SAP_BASIS 7.58) — see docs/sap/runbooks/soidc-entra-obo.md
+
+preview_profiles:  # valid topologies, >=1 unproven axis — see the status:stub values above
+  cognito-userfed-ias:  { frontend: cognito,           inbound: cognito, mode: [live],        outbound: user-federation }
+  entra-userfed:        { frontend: cognito+federated, inbound: cognito, mode: [live, batch], outbound: user-federation }
+  okta-userfed:         { frontend: direct-okta,       inbound: okta,    mode: [live],        outbound: user-federation }
+
+custom:
+  enabled: false
+  # frontend: ...  inbound: ...  mode: [...]  outbound: ...

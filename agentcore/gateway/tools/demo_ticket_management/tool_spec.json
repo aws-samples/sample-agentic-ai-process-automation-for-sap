@@ -1,0 +1,109 @@
+[
+  {
+    "name": "demo_create_ticket",
+    "description": "Create a new ticket in the demo ticket management system (placeholder for ServiceNow or similar). Use when escalating an exception that needs human approval, assigning work to a team member, or logging an issue for tracking. Returns the created ticket with its ID.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "title": {
+          "type": "string",
+          "description": "Short summary of the ticket"
+        },
+        "description": {
+          "type": "string",
+          "description": "Detailed description of the issue or request"
+        },
+        "priority": {
+          "type": "string",
+          "enum": ["high", "medium", "low"],
+          "description": "Ticket priority — values from tickets.schema.json TicketPriority (default: medium)"
+        },
+        "assigned_to": {
+          "type": "string",
+          "description": "Person or team to assign the ticket to"
+        },
+        "case_id": {
+          "type": "string",
+          "description": "Related ERP case ID for correlation (e.g. PO number)"
+        },
+        "category": {
+          "type": "string",
+          "description": "Ticket category (e.g. approval_request, exception, inquiry)"
+        },
+        "response_type": {
+          "type": "string",
+          "enum": ["approval", "free_text"],
+          "description": "Expected response type: 'approval' for approve/deny workflow, 'free_text' when you need a written answer from the reviewer (default: approval)"
+        }
+      },
+      "required": ["title", "description"]
+    }
+  },
+  {
+    "name": "demo_update_ticket",
+    "description": "Update an existing ticket in the demo ticket management system — change status, reassign, add comments, or record a resolution. Use status 'approved' or 'denied' for approval workflows.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "ticket_id": {
+          "type": "string",
+          "description": "Ticket ID (e.g. TKT-A1B2C3D4)"
+        },
+        "status": {
+          "type": "string",
+          "enum": ["open", "assigned", "approved", "denied", "replied", "closed"],
+          "description": "New ticket status — values from tickets.schema.json TicketStatus"
+        },
+        "assigned_to": {
+          "type": "string",
+          "description": "Reassign to a different person or team"
+        },
+        "resolution": {
+          "type": "string",
+          "description": "Resolution notes (when closing or deciding)"
+        },
+        "comment": {
+          "type": "string",
+          "description": "Add a comment to the ticket"
+        },
+        "comment_author": {
+          "type": "string",
+          "description": "Author of the comment (default: agent)"
+        }
+      },
+      "required": ["ticket_id"]
+    }
+  },
+  {
+    "name": "demo_get_ticket",
+    "description": "Get a single ticket by ID from the demo ticket management system.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "ticket_id": {
+          "type": "string",
+          "description": "Ticket ID (e.g. TKT-A1B2C3D4)"
+        }
+      },
+      "required": ["ticket_id"]
+    }
+  },
+  {
+    "name": "demo_list_tickets",
+    "description": "List tickets from the demo ticket management system, optionally filtered by status or assignee.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": ["open", "assigned", "approved", "denied", "closed"],
+          "description": "Filter by status — values from tickets.schema.json TicketStatus"
+        },
+        "assigned_to": {
+          "type": "string",
+          "description": "Filter by assignee"
+        }
+      }
+    }
+  }
+]

@@ -1,0 +1,129 @@
+[
+  {
+    "test_id": "ap_price_variance_within_tolerance",
+    "description": "Invoice unit price ~1% over PO price (within ±2% tolerance) should be matched and released without approval",
+    "process_type": "price_variance",
+    "payload": {
+      "document_number": "5105600101",
+      "item_id": "2026",
+      "process_type": "price_variance"
+    },
+    "seed": {
+      "sap_params": {
+        "po_amount": 50000,
+        "invoice_amount": 50500,
+        "po_quantity": 10,
+        "invoice_quantity": 10,
+        "gr_quantity": 10,
+        "payment_block": "R",
+        "skip_gr": false
+      }
+    },
+    "expected": {
+      "outcome": "auto_release",
+      "reason": "Price variance within ±2% tolerance per invoice-matching SOP",
+      "required_tool_calls": [
+        "get_case_state",
+        "odata_read",
+        "search_sap_sops",
+        "update_case_state"
+      ]
+    }
+  },
+  {
+    "test_id": "ap_price_variance_above_tolerance",
+    "description": "Invoice unit price ~8% over PO price (above ±2% tolerance) should be routed for procurement approval, not auto-released",
+    "process_type": "price_variance",
+    "payload": {
+      "document_number": "5105600102",
+      "item_id": "2026",
+      "process_type": "price_variance"
+    },
+    "seed": {
+      "sap_params": {
+        "po_amount": 50000,
+        "invoice_amount": 54000,
+        "po_quantity": 10,
+        "invoice_quantity": 10,
+        "gr_quantity": 10,
+        "payment_block": "R",
+        "skip_gr": false
+      }
+    },
+    "expected": {
+      "outcome": "approval_required",
+      "reason": "Price variance exceeds ±2% tolerance — requires procurement approval per SOP",
+      "required_tool_calls": [
+        "get_case_state",
+        "odata_read",
+        "search_sap_sops",
+        "send_notification",
+        "update_case_state"
+      ]
+    }
+  },
+  {
+    "test_id": "ap_quantity_variance_above_tolerance",
+    "description": "Invoice quantity exceeds goods-receipt quantity beyond ±5%/±10-unit tolerance should be routed for buyer approval",
+    "process_type": "quantity_variance",
+    "payload": {
+      "document_number": "5105600103",
+      "item_id": "2026",
+      "process_type": "quantity_variance"
+    },
+    "seed": {
+      "sap_params": {
+        "po_amount": 50000,
+        "invoice_amount": 60000,
+        "po_quantity": 100,
+        "invoice_quantity": 120,
+        "gr_quantity": 100,
+        "payment_block": "R",
+        "skip_gr": false
+      }
+    },
+    "expected": {
+      "outcome": "approval_required",
+      "reason": "Quantity variance exceeds tolerance — requires buyer approval per SOP",
+      "required_tool_calls": [
+        "get_case_state",
+        "odata_read",
+        "search_sap_sops",
+        "send_notification",
+        "update_case_state"
+      ]
+    }
+  },
+  {
+    "test_id": "ap_missing_goods_receipt",
+    "description": "Invoice received with no goods receipt posted should be flagged for warehouse/receiving escalation, not released",
+    "process_type": "missing_goods_receipt",
+    "payload": {
+      "document_number": "5105600104",
+      "item_id": "2026",
+      "process_type": "missing_goods_receipt"
+    },
+    "seed": {
+      "sap_params": {
+        "po_amount": 40000,
+        "invoice_amount": 40000,
+        "po_quantity": 10,
+        "invoice_quantity": 10,
+        "gr_quantity": 10,
+        "payment_block": "R",
+        "skip_gr": true
+      }
+    },
+    "expected": {
+      "outcome": "manual_review_required",
+      "reason": "No goods receipt found — escalate to warehouse/receiving per SOP",
+      "required_tool_calls": [
+        "get_case_state",
+        "odata_read",
+        "search_sap_sops",
+        "send_notification",
+        "update_case_state"
+      ]
+    }
+  }
+]

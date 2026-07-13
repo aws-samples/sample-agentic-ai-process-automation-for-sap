@@ -1,0 +1,35 @@
+{
+  "skill_id": "example_finance_accruals",
+  "display_name": "Example \u2014 Finance Accruals & Month-End",
+  "description": "REFERENCE EXAMPLE ONLY \u2014 not wired into the live pipeline (no poller domain config, not in the Domain enum). Kept as a worked second-use-case template showing month-end accrual processing: PO accruals, WBS project accruals, delivery date validation, journal entry creation. See docs/extending/ADDING_USE_CASES.md. The only wired domain is finance_ap.",
+  "model_tier": "sonnet",
+  "max_turns": 45,
+  "multi_agent": false,
+  "orchestrator_tier": "haiku",
+  "specialist_tier": "sonnet",
+  "gateway_tools": [
+    "get_case_state",
+    "update_case_state",
+    "odata_create",
+    "odata_update",
+    "odata_function_import",
+    "search_sap_sops",
+    "search_sap_api_docs",
+    "send_notification",
+    "demo_create_ticket",
+    "demo_update_ticket",
+    "demo_get_ticket",
+    "demo_list_tickets",
+    "find_sap_services",
+    "get_metadata",
+    "get_service_hints",
+    "odata_read",
+    "odata_count"
+  ],
+  "process_type_to_sop": {
+    "po_accrual": "example_finance_accruals/po_accrual.pdf",
+    "tooling_accrual": "example_finance_accruals/po_accrual.pdf",
+    "wbs_accrual": "example_finance_accruals/wbs_accrual.pdf",
+    "project_accrual": "example_finance_accruals/wbs_accrual.pdf"
+  }
+}

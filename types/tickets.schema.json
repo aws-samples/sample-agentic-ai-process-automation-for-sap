@@ -1,0 +1,51 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://agentic-erp-automation/tickets.schema.json",
+  "title": "Ticket",
+  "description": "Single source of truth for ticket management types. Generated into TS and Python via `make generate-types`.",
+  "type": "object",
+  "required": ["ticket_id", "title", "description", "status", "priority", "created_at", "updated_at"],
+  "additionalProperties": false,
+  "properties": {
+    "ticket_id":   { "type": "string", "description": "Unique ticket identifier (e.g. TKT-A1B2C3D4)." },
+    "title":       { "type": "string", "description": "Short summary of the ticket." },
+    "description": { "type": "string", "description": "Detailed description of the issue or request." },
+    "status":      { "$ref": "#/definitions/TicketStatus" },
+    "priority":    { "$ref": "#/definitions/TicketPriority" },
+    "created_by":  { "type": ["string", "null"], "description": "User or agent that created the ticket." },
+    "assigned_to": { "type": ["string", "null"], "description": "Person or team assigned to the ticket." },
+    "case_id":     { "type": ["string", "null"], "description": "Related ERP case ID for correlation (doc#item format)." },
+    "category":    { "type": ["string", "null"], "description": "Ticket category (e.g. approval_request, exception, inquiry)." },
+    "response_type": { "type": "string", "enum": ["approval", "free_text"], "default": "approval", "description": "Expected response type: 'approval' shows approve/deny buttons, 'free_text' shows a reply textarea." },
+    "resolution":  { "type": ["string", "null"], "description": "Resolution notes." },
+    "comments":    {
+      "type": "array",
+      "items": { "$ref": "#/definitions/TicketComment" },
+      "description": "Chronological list of comments on the ticket."
+    },
+    "created_at":  { "type": "string", "description": "ISO timestamp of creation." },
+    "updated_at":  { "type": "string", "description": "ISO timestamp of last update." }
+  },
+  "definitions": {
+    "TicketStatus": {
+      "type": "string",
+      "enum": ["open", "assigned", "approved", "denied", "replied", "closed"],
+      "description": "Ticket lifecycle status."
+    },
+    "TicketPriority": {
+      "type": "string",
+      "enum": ["high", "medium", "low"],
+      "description": "Ticket priority level."
+    },
+    "TicketComment": {
+      "type": "object",
+      "required": ["author", "text", "timestamp"],
+      "additionalProperties": false,
+      "properties": {
+        "author":    { "type": "string", "description": "Comment author (user alias or 'agent')." },
+        "text":      { "type": "string", "description": "Comment body." },
+        "timestamp": { "type": "string", "description": "ISO timestamp." }
+      }
+    }
+  }
+}

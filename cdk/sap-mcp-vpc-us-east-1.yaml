@@ -1,0 +1,331 @@
+# Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  VPC for AWS for SAP MCP Server on Bedrock AgentCore (us-east-1). Creates
+  private subnets (with NAT for SAP endpoint access), VPC endpoints for AWS
+  services, and a security group for the MCP Server runtime.
+  NOTE: subnets are pinned to AgentCore-supported AZs in us-east-1
+  (use1-az2=us-east-1a, use1-az4=us-east-1b, use1-az1=us-east-1d). us-east-1c
+  (use1-az6) is NOT supported by AgentCore and is intentionally avoided.
+
+Parameters:
+  VpcCidr:
+    Type: String
+    Default: 10.100.0.0/16
+    Description: CIDR block for the VPC
+
+  PrivateSubnet1Cidr:
+    Type: String
+    Default: 10.100.1.0/24
+    Description: CIDR for private subnet in AZ1
+
+  PrivateSubnet2Cidr:
+    Type: String
+    Default: 10.100.2.0/24
+    Description: CIDR for private subnet in AZ2
+
+  PrivateSubnet3Cidr:
+    Type: String
+    Default: 10.100.3.0/24
+    Description: CIDR for private subnet in AZ3
+
+  PublicSubnet1Cidr:
+    Type: String
+    Default: 10.100.101.0/24
+    Description: CIDR for public subnet (NAT Gateway)
+
+  SapEndpointHost:
+    Type: String
+    Default: sap-host.example.com
+    Description: Hostname of the SAP OData endpoint (for documentation/tagging)
+
+Resources:
+  # --- VPC ---
+  Vpc:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: !Ref VpcCidr
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags:
+        - Key: Name
+          Value: sap-mcp-vpc-321d23
+
+  # --- Internet Gateway (for NAT) ---
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: sap-mcp-igw-321d23
+
+  VpcGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref Vpc
+      InternetGatewayId: !Ref InternetGateway
+
+  # --- Public Subnet (for NAT Gateway) ---
+  PublicSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref Vpc
+      CidrBlock: !Ref PublicSubnet1Cidr
+      AvailabilityZone: us-east-1a
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: sap-mcp-public-1-321d23
+
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref Vpc
+      Tags:
+        - Key: Name
+          Value: sap-mcp-public-rt-321d23
+
+  PublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: VpcGatewayAttachment
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+
+  PublicSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet1
+      RouteTableId: !Ref PublicRouteTable
+
+  # --- NAT Gateway ---
+  NatEip:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+      Tags:
+        - Key: Name
+          Value: sap-mcp-nat-eip-321d23
+
+  NatGateway:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt NatEip.AllocationId
+      SubnetId: !Ref PublicSubnet1
+      Tags:
+        - Key: Name
+          Value: sap-mcp-nat-321d23
+
+  # --- Private Subnets (AgentCore ENIs go here) ---
+  # AZs pinned to AgentCore-supported zones in us-east-1.
+  PrivateSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref Vpc
+      CidrBlock: !Ref PrivateSubnet1Cidr
+      AvailabilityZone: us-east-1a   # use1-az2 (supported)
+      Tags:
+        - Key: Name
+          Value: sap-mcp-private-1-321d23
+
+  PrivateSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref Vpc
+      CidrBlock: !Ref PrivateSubnet2Cidr
+      AvailabilityZone: us-east-1b   # use1-az4 (supported)
+      Tags:
+        - Key: Name
+          Value: sap-mcp-private-2-321d23
+
+  PrivateSubnet3:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref Vpc
+      CidrBlock: !Ref PrivateSubnet3Cidr
+      AvailabilityZone: us-east-1d   # use1-az1 (supported)
+      Tags:
+        - Key: Name
+          Value: sap-mcp-private-3-321d23
+
+  PrivateRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref Vpc
+      Tags:
+        - Key: Name
+          Value: sap-mcp-private-rt-321d23
+
+  PrivateRoute:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NatGateway
+
+  PrivateSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnet1
+      RouteTableId: !Ref PrivateRouteTable
+
+  PrivateSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnet2
+      RouteTableId: !Ref PrivateRouteTable
+
+  PrivateSubnet3RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnet3
+      RouteTableId: !Ref PrivateRouteTable
+
+  # --- Security Group for MCP Server (AgentCore ENIs) ---
+  McpServerSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for AWS for SAP MCP Server on AgentCore
+      VpcId: !Ref Vpc
+      SecurityGroupEgress:
+        - Description: HTTPS to SAP endpoint (public internet via NAT)
+          IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value: sap-mcp-sg-321d23
+
+  # --- VPC Endpoints (Interface) ---
+  VpcEndpointSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Allow HTTPS from private subnets to VPC endpoints
+      VpcId: !Ref Vpc
+      SecurityGroupIngress:
+        - Description: HTTPS from VPC CIDR
+          IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: !Ref VpcCidr
+      Tags:
+        - Key: Name
+          Value: sap-mcp-vpce-sg-321d23
+
+  EcrApiEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      VpcId: !Ref Vpc
+      ServiceName: com.amazonaws.us-east-1.ecr.api
+      VpcEndpointType: Interface
+      PrivateDnsEnabled: true
+      SubnetIds:
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
+        - !Ref PrivateSubnet3
+      SecurityGroupIds:
+        - !Ref VpcEndpointSecurityGroup
+
+  EcrDkrEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      VpcId: !Ref Vpc
+      ServiceName: com.amazonaws.us-east-1.ecr.dkr
+      VpcEndpointType: Interface
+      PrivateDnsEnabled: true
+      SubnetIds:
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
+        - !Ref PrivateSubnet3
+      SecurityGroupIds:
+        - !Ref VpcEndpointSecurityGroup
+
+  CloudWatchLogsEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      VpcId: !Ref Vpc
+      ServiceName: com.amazonaws.us-east-1.logs
+      VpcEndpointType: Interface
+      PrivateDnsEnabled: true
+      SubnetIds:
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
+        - !Ref PrivateSubnet3
+      SecurityGroupIds:
+        - !Ref VpcEndpointSecurityGroup
+
+  SecretsManagerEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      VpcId: !Ref Vpc
+      ServiceName: com.amazonaws.us-east-1.secretsmanager
+      VpcEndpointType: Interface
+      PrivateDnsEnabled: true
+      SubnetIds:
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
+        - !Ref PrivateSubnet3
+      SecurityGroupIds:
+        - !Ref VpcEndpointSecurityGroup
+
+  # --- VPC Endpoint (Gateway) for S3 ---
+  S3GatewayEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      VpcId: !Ref Vpc
+      ServiceName: com.amazonaws.us-east-1.s3
+      VpcEndpointType: Gateway
+      RouteTableIds:
+        - !Ref PrivateRouteTable
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: AllowECRLayerAccess
+            Effect: Allow
+            Principal: '*'
+            Action:
+              - s3:GetObject
+            Resource:
+              - arn:aws:s3:::prod-us-east-1-starport-layer-bucket/*
+          - Sid: AllowAgentCoreCodeArtifacts
+            Effect: Allow
+            Principal: '*'
+            Action:
+              - s3:GetObject
+            Resource:
+              - arn:aws:s3:::acr-code-*-us-east-1-an
+              - arn:aws:s3:::acr-code-*-us-east-1-an/*
+
+Outputs:
+  VpcId:
+    Description: VPC ID for the SAP MCP deployment
+    Value: !Ref Vpc
+    Export:
+      Name: sap-mcp-vpc-id-321d23
+
+  PrivateSubnetIds:
+    Description: Comma-separated private subnet IDs (use for McpServerNetworkSubnets parameter)
+    Value: !Join
+      - ','
+      - - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
+        - !Ref PrivateSubnet3
+    Export:
+      Name: sap-mcp-private-subnets-321d23
+
+  SecurityGroupId:
+    Description: Security group ID (use for McpServerVpcSecurityGroup parameter)
+    Value: !Ref McpServerSecurityGroup
+    Export:
+      Name: sap-mcp-security-group-321d23
+
+  PrivateSubnet1Id:
+    Value: !Ref PrivateSubnet1
+  PrivateSubnet2Id:
+    Value: !Ref PrivateSubnet2
+  PrivateSubnet3Id:
+    Value: !Ref PrivateSubnet3

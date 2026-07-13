@@ -1,0 +1,92 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "agentic-erp-automation-quick-start"
+dynamic = ["version"]
+description = "Production-ready starter code for autonomous AI agents that automate ERP exception handling, built on FAST (Fullstack AgentCore Solution Template)"
+readme = "README.md"
+license = { text = "Apache-2.0" }
+requires-python = ">=3.10"
+authors = [
+    { name = "Zach Daniels" },
+    { name = "Sagar Tallapragadada" },
+    { name = "Diego Lombardini" },
+    { name = "Abhijeet Jangam" },
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: Apache Software License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+]
+
+# Core dependencies for gateway utilities and scripts
+dependencies = [
+    "boto3>=1.34.0",
+    "requests>=2.31.0",
+    "PyYAML>=6.0.1",
+    "colorama>=0.4.6",
+]
+
+[project.optional-dependencies]
+# Development dependencies
+dev = ["pytest>=7.0.0", "ruff>=0.1.0", "mypy>=1.0.0"]
+
+# Strands agent dependencies (for local development).
+# MUST stay in sync with agentcore/agent/requirements.txt — that file is the
+# source of truth the container/prod builds from. basic_agent.py imports
+# CacheConfig (strands 1.24+) and strands_tools, so stale pins here break a
+# local `pip install -e .[agent-strands]`.
+agent-strands = [
+    "strands-agents==1.24.0",
+    "strands-agents-tools>=0.2.20",
+    "mcp==1.26.0",
+    "bedrock-agentcore[strands-agents]==1.2.0",
+    "PyJWT[crypto]>=2.10.1",
+    "httptools>=0.6.0",
+]
+
+# All dependencies for local development
+all = [
+    "agentic-erp-automation-quick-start[dev,agent-strands]",
+]
+
+[project.urls]
+Homepage = "https://github.com/aws-samples/agentic-erp-automation-quick-start"
+Documentation = "https://github.com/aws-samples/agentic-erp-automation-quick-start/tree/main/docs"
+Repository = "https://github.com/aws-samples/agentic-erp-automation-quick-start"
+Issues = "https://github.com/aws-samples/agentic-erp-automation-quick-start/issues"
+
+[tool.setuptools.dynamic]
+version = {file = "VERSION"}
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["gateway*", "scripts*"]
+exclude = ["tests*", "cdk*", "frontend*", "agent*"]
+
+# Ruff configuration lives in ruff.toml (the project's single source of truth).
+# Ruff loads ruff.toml in preference to any [tool.ruff] table here, so config is
+# kept there to avoid two competing, silently-shadowed rule sets.
+
+[tool.mypy]
+python_version = "3.10"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py", "*_test.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+markers = [
+    "unit: mark a test as a unit test",
+    "integration: mark a test as an integration test",
+]

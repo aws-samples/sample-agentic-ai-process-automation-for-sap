@@ -1,0 +1,46 @@
+[
+  {
+    "name": "get_case_state",
+    "description": "Get an ERP exception case from DynamoDB by case key (document_number + item_id). For AP: document_number=supplier invoice number, item_id=fiscal year.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "document_number": {
+          "type": "string",
+          "description": "Case partition key — supplier invoice number (AP)"
+        },
+        "item_id": {
+          "type": "string",
+          "description": "Case sort key — fiscal year (AP)"
+        }
+      },
+      "required": ["document_number", "item_id"]
+    }
+  },
+  {
+    "name": "update_case_state",
+    "description": "Update an ERP exception case fields (status, amounts, dates, etc.).",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "document_number": {
+          "type": "string",
+          "description": "Case partition key — supplier invoice number (AP)"
+        },
+        "item_id": {
+          "type": "string",
+          "description": "Case sort key — fiscal year (AP)"
+        },
+        "updates": {
+          "type": "string",
+          "description": "JSON string of fields to update (e.g. {\"status\": \"processing\", \"exception_type\": \"PRICE\"})"
+        },
+        "action": {
+          "type": "string",
+          "description": "Action name for history tracking (e.g. 'sap_updated', 'invoice_released', 'manual_review_required')"
+        }
+      },
+      "required": ["document_number", "item_id", "updates", "action"]
+    }
+  }
+]

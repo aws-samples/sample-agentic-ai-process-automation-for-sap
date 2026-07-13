@@ -1,0 +1,101 @@
+# Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+# =============================================================================
+# Terraform Configuration Example
+# =============================================================================
+# Copy this file to terraform.tfvars and customize the values.
+# This is the Terraform equivalent of cdk/config.yaml.
+#
+# Region: Set via AWS_REGION environment variable or AWS CLI profile.
+# =============================================================================
+
+# ── Required ──────────────────────────────────────────────────────────────────
+
+stack_name_base  = "erp-accrual-agent"   # Max 35 chars, hyphens only
+admin_user_email = null                   # Example: "admin@example.com"
+
+# ── Backend ───────────────────────────────────────────────────────────────────
+
+backend_pattern         = "agent"    # single Strands agent (top-level agent/)
+backend_deployment_type = "zip"      # zip (no Docker needed) | docker (requires Docker/Finch)
+backend_network_mode    = "PUBLIC"   # PUBLIC | VPC
+
+# Required when backend_network_mode = "VPC"
+# backend_vpc_id                 = "vpc-xxxxxxxxxxxxxxxxx"
+# backend_vpc_subnet_ids         = ["subnet-aaaa1111bbbb2222c", "subnet-cccc3333dddd4444e"]
+# backend_vpc_security_group_ids = ["sg-0abc1234def56789a"]  # Optional
+
+# ── SAP ───────────────────────────────────────────────────────────────────────
+
+# sap_base_url = "https://my-sap-host.example.com:443"
+
+# The OData poller authenticates to SAP with the service-account credentials in
+# Secrets Manager (basic auth). Interactive agent SAP access goes through the
+# external AWS-for-SAP MCP server.
+
+# OData poller schedule (EventBridge rate expression)
+poller_schedule = "rate(5 minutes)"
+
+# Bedrock embedding model for Knowledge Bases
+embedding_model = "amazon.titan-embed-text-v2:0"
+
+# ── Autonomy Controls ────────────────────────────────────────────────────────
+# Flippable at runtime via SSM, frontend toggle, or API.
+
+trigger_mode = "manual"      # auto = poller enqueues immediately | manual = human triggers from UI/CLI
+
+# ── Notification Channel ─────────────────────────────────────────────────────
+
+notification_channel = "ses"  # ses | slack | jira | servicenow
+# ses_sender_email        = "accrual-agent@example.com"
+# notification_secret_arn = "arn:aws:secretsmanager:us-east-1:123456789:secret:my-creds"
+
+# ── Auth Provider ─────────────────────────────────────────────────────────────
+
+auth_provider = "cognito"  # cognito | okta | custom-oidc
+# auth_issuer_url = "https://dev-12345.okta.com/oauth2/default"
+# auth_client_id  = "0oa1234567890abcdef"
+
+# Inbound auth profile (see auth-profiles.yaml). Default cognito-basic needs nothing else.
+auth_profile = "cognito-basic"
+# For entra/okta inbound profiles, supply the external IdP values (known pre-deploy):
+# auth_inbound_discovery_url  = "https://login.microsoftonline.com/<tenant>/v2.0/.well-known/openid-configuration"
+# auth_inbound_allowed_clients = ["<app-client-id>"]
+# sap_mcp_enabled — leave false on Terraform. TF has no SAP MCP module; the outbound/mode/frontend
+# axes are CDK-only. This flag ONLY arms the emit-time mcp_supported guard and does not provision MCP.
+
+# ── Cedar Policy Engine ──────────────────────────────────────────────────────
+
+cedar_enforcement_mode = "LOG_ONLY"  # LOG_ONLY | ENFORCE
+
+# ── Observability ─────────────────────────────────────────────────────────────
+
+# alarm_email = "ops-team@example.com"
+
+# ── Agent Queue ───────────────────────────────────────────────────────────────
+
+agent_queue_max_concurrency = 5
+
+# ── Demo Infrastructure ───────────────────────────────────────────────────────
+# Single opt-in gate for ALL demo/sample resources (ticket-management demo,
+# AR lockbox demo + seeder, test-data API). Leave false for a clean production
+# base; set true to explore the sample end-to-end.
+
+demo_enabled = false
+
+# ── Contact Directory ────────────────────────────────────────────────────────
+# Referenced as {{CONTACT_<KEY>}} in SOP files.
+
+contacts = {
+  # po_owner          = "po-owner@example.com"
+  # finance_team      = "finance@example.com"
+  # technical_support = "support@example.com"
+  # ap_team           = "ap-team@example.com"
+  # procurement       = "procurement@example.com"
+  # warehouse         = "warehouse@example.com"
+  # finance_approvals = "finance-approvals@example.com"
+  # ar_team           = "ar-team@example.com"
+  # treasury          = "treasury@example.com"
+  # customer_service  = "customer-service@example.com"
+}

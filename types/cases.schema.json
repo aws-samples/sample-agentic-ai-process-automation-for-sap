@@ -1,0 +1,103 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://agentic-erp-automation/cases.schema.json",
+  "title": "WorkItem",
+  "description": "Single source of truth for ERP automation work item types. Generated into TS and Python via `make generate-types`.",
+  "type": "object",
+  "required": [
+    "document_number", "item_id", "status", "domain", "process_type",
+    "created_at", "updated_at"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "document_number":    { "type": "string", "description": "SAP document number (e.g. supplier invoice). Partition key." },
+    "item_id":            { "type": "string", "description": "Item identifier within the document. Sort key." },
+    "domain":             { "$ref": "#/definitions/Domain", "description": "Skill domain this item belongs to." },
+    "process_type":       { "type": "string", "description": "Specific process type for skill routing, e.g. invoice_matching, price_variance." },
+    "title":              { "type": "string", "description": "Human-readable summary for display." },
+    "description":        { "type": ["string", "null"], "description": "Short detail text." },
+    "priority":           { "$ref": "#/definitions/Priority" },
+    "status":             { "$ref": "#/definitions/CaseStatus" },
+    "created_at":         { "type": "string" },
+    "updated_at":         { "type": "string" },
+    "company_code":       { "type": ["string", "null"], "description": "SAP company code." },
+    "supplier_number":    { "type": ["string", "null"], "description": "AP: Supplier/vendor number." },
+    "amount":             { "type": ["number", "null"], "description": "AP: Transaction amount." },
+    "currency":           { "type": ["string", "null"], "description": "AP: Currency code (e.g. USD)." },
+    "exception_type":     { "type": ["string", "null"], "description": "AP: Payment blocking reason." },
+    "document_date":      { "type": ["string", "null"], "description": "AP: Invoice document date." },
+    "posting_date":       { "type": ["string", "null"], "description": "AP: Posting date." },
+    "external_reference": { "type": ["string", "null"], "description": "AP: Supplier's own invoice ID." },
+    "purchase_order":     { "type": ["string", "null"], "description": "AP: PO number referenced on the invoice line item." },
+    "po_line_item":       { "type": ["string", "null"], "description": "AP: PO line item number." },
+    "invoice_quantity":   { "type": ["number", "null"], "description": "AP: Invoiced quantity in PO unit." },
+    "inquiry_sent_at":    { "type": ["string", "null"], "description": "ISO timestamp of an outbound inquiry, if the workflow sent one." },
+    "ttl":                { "type": ["integer", "null"] },
+    "user_rating":        {
+      "type": ["string", "null"],
+      "enum": ["positive", "negative"],
+      "description": "Case-level resolution quality rating from a human reviewer."
+    },
+    "user_rating_comment": { "type": ["string", "null"], "description": "Optional comment explaining the rating." },
+    "user_rating_at":     { "type": ["string", "null"], "description": "ISO timestamp of when the rating was submitted." },
+    "agent_traces":       {
+      "description": "Historical agent thought-process traces, one per invocation.",
+      "type": "array",
+      "items": { "$ref": "#/definitions/AgentTrace" }
+    }
+  },
+  "definitions": {
+    "Domain": {
+      "type": "string",
+      "enum": ["finance_ap"],
+      "description": "Skill domain — aligns with skills/ folder names."
+    },
+    "Priority": {
+      "type": "string",
+      "enum": ["high", "medium", "low"]
+    },
+    "CaseStatus": {
+      "type": "string",
+      "enum": [
+        "detected",
+        "processing",
+        "awaiting_human_input",
+        "sap_updated",
+        "complete",
+        "manual_review_required"
+      ]
+    },
+    "AgentTrace": {
+      "type": "object",
+      "required": ["trace_id", "timestamp", "segments"],
+      "additionalProperties": false,
+      "properties": {
+        "trace_id":  { "type": "string" },
+        "timestamp": { "type": "string" },
+        "trigger":   { "$ref": "#/definitions/Trigger", "description": "What initiated this invocation." },
+        "prompt":    { "type": "string" },
+        "outcome":   { "type": "string", "description": "Invocation result: complete, stopped, cancelled, error, disconnected." },
+        "segments":  {
+          "type": "array",
+          "items": { "$ref": "#/definitions/TraceSegment" }
+        }
+      }
+    },
+    "Trigger": {
+      "type": "string",
+      "enum": ["poller", "webhook-ses", "webhook-slack", "webhook-jira", "webhook-servicenow", "ticket-action", "manual"],
+      "description": "What initiated an agent invocation."
+    },
+    "TraceSegment": {
+      "type": "object",
+      "required": ["type"],
+      "properties": {
+        "type":        { "type": "string", "enum": ["text", "tool"] },
+        "content":     { "type": "string" },
+        "tool_name":   { "type": "string" },
+        "tool_input":  { "type": "string" },
+        "tool_result": { "type": "string" }
+      }
+    }
+  }
+}

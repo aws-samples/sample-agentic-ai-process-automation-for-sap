@@ -1,0 +1,271 @@
+// Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+// SPDX-License-Identifier: Apache-2.0
+
+"use client"
+
+import { useState, useMemo } from "react"
+import {
+  ArrowLeft,
+  Timer,
+  User,
+  Webhook,
+  CheckCircle2,
+  XCircle,
+  AlertTriangle,
+  ChevronDown,
+  ChevronRight,
+  Layers,
+  Activity,
+  Hash,
+} from "lucide-react"
+import { Card, CardContent } from "@/components/ui/card"
+import type { TraceRecord } from "@/services/observabilityService"
+import { filterTracesByCase, computeSessionAggregates, getOutcomeColor } from "./utils/traceUtils"
+import SpanTimeline from "./SpanTimeline"
+import { useStaggeredEntrance } from "./hooks/useStaggeredEntrance"
+import "./observability-animations.css"
+
+// ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+export interface SessionViewProps {
+  caseId: string
+  traces: TraceRecord[]
+  onClose: () => void
+}
+
+// ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+function TriggerIcon({ trigger }: { trigger: string }) {
+  switch (trigger) {
+    case "poller":
+      return <Timer size={14} className="text-amber-600" />
+    case "manual":
+      return <User size={14} className="text-blue-600" />
+    case "webhook-ses":
+    case "webhook":
+      return <Webhook size={14} className="text-purple-600" />
+    default:
+      return <Activity size={14} className="text-gray-500" />
+  }
+}
+
+function getTriggerLabel(trigger: string): string {
+  switch (trigger) {
+    case "poller":
+      return "Poller"
+    case "manual":
+      return "Manual"
+    case "webhook-ses":
+      return "Email"
+    case "webhook":
+      return "Webhook"
+    default:
+      return trigger || "Unknown"
+  }
+}
+
+function OutcomeIcon({ outcome }: { outcome: string }) {
+  switch (outcome) {
+    case "complete":
+      return <CheckCircle2 size={14} className="text-green-600" />
+    case "error":
+      return <XCircle size={14} className="text-red-600" />
+    case "cancelled":
+      return <AlertTriangle size={14} className="text-yellow-600" />
+    default:
+      return <AlertTriangle size={14} className="text-gray-400" />
+  }
+}
+
+function getOutcomeLabel(outcome: string): string {
+  switch (outcome) {
+    case "complete":
+      return "Complete"
+    case "error":
+      return "Error"
+    case "cancelled":
+      return "Cancelled"
+    case "disconnected":
+      return "Disconnected"
+    default:
+      return outcome || "Unknown"
+  }
+}
+
+// ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+export default function SessionView({ caseId, traces, onClose }: SessionViewProps) {
+  const [expandedTraceId, setExpandedTraceId] = useState<string | null>(null)
+
+  const caseTraces = useMemo(() => filterTracesByCase(traces, caseId), [traces, caseId])
+  const aggregates = useMemo(() => computeSessionAggregates(caseTraces), [caseTraces])
+  const { getDelay } = useStaggeredEntrance(caseTraces.length, 0, 60)
+
+  const handleToggleTrace = (traceId: string) => {
+    setExpandedTraceId(prev => (prev === traceId ? null : traceId))
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center gap-3">
+        <button
+          onClick={onClose}
+          className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-100 transition-colors"
+          aria-label="Back to traces"
+        >
+          <ArrowLeft size={14} />
+          Back
+        </button>
+        <div>
+          <h3 className="text-sm font-semibold text-gray-900">
+            Session: <span className="font-mono">{caseId}</span>
+          </h3>
+          <p className="text-[11px] text-gray-500">
+            All agent invocations for this case in chronological order
+          </p>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-3 gap-3">
+        <Card className="p-3 py-3">
+          <CardContent className="p-0 flex items-center gap-2">
+            <div className="p-1.5 rounded-md bg-blue-50">
+              <Hash size={14} className="text-blue-600" />
+            </div>
+            <div>
+              <p className="text-[10px] text-gray-500 uppercase tracking-wider">Invocations</p>
+              <p className="text-lg font-bold tabular-nums">{aggregates.totalInvocations}</p>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="p-3 py-3">
+          <CardContent className="p-0 flex items-center gap-2">
+            <div className="p-1.5 rounded-md bg-purple-50">
+              <Layers size={14} className="text-purple-600" />
+            </div>
+            <div>
+              <p className="text-[10px] text-gray-500 uppercase tracking-wider">Total Segments</p>
+              <p className="text-lg font-bold tabular-nums">{aggregates.totalSegments}</p>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="p-3 py-3">
+          <CardContent className="p-0 flex items-center gap-2">
+            <div
+              className="p-1.5 rounded-md"
+              style={{ backgroundColor: `${getOutcomeColor(aggregates.overallOutcome)}15` }}
+            >
+              <OutcomeIcon outcome={aggregates.overallOutcome} />
+            </div>
+            <div>
+              <p className="text-[10px] text-gray-500 uppercase tracking-wider">Outcome</p>
+              <p
+                className="text-sm font-semibold"
+                style={{ color: getOutcomeColor(aggregates.overallOutcome) }}
+              >
+                {getOutcomeLabel(aggregates.overallOutcome)}
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {caseTraces.length === 0 && (
+        <p className="text-gray-400 text-xs text-center py-6">No traces found for this case.</p>
+      )}
+
+      {caseTraces.length > 0 && (
+        <div className="relative pl-6">
+          <div
+            className="absolute left-[11px] top-3 bottom-3 w-px bg-gray-200"
+            aria-hidden="true"
+          />
+
+          <div className="space-y-3">
+            {caseTraces.map((trace, index) => {
+              const isExpanded = expandedTraceId === trace.trace_id
+              const delay = getDelay(index)
+              const time = new Date(trace.timestamp).toLocaleTimeString([], {
+                hour: "2-digit",
+                minute: "2-digit",
+                second: "2-digit",
+              })
+              const date = new Date(trace.timestamp).toLocaleDateString([], {
+                month: "short",
+                day: "numeric",
+              })
+
+              return (
+                <div
+                  key={trace.trace_id}
+                  className="relative opacity-0"
+                  style={{
+                    animation: `fadeSlideUp 300ms ease-out ${delay}ms forwards`,
+                  }}
+                >
+                  <div
+                    className="absolute -left-6 top-3 w-[10px] h-[10px] rounded-full border-2 border-white"
+                    style={{ backgroundColor: getOutcomeColor(trace.outcome) }}
+                    aria-hidden="true"
+                  />
+
+                  <div className="border rounded-md overflow-hidden transition-colors">
+                    <button
+                      onClick={() => handleToggleTrace(trace.trace_id)}
+                      className={`flex items-center gap-2 px-3 py-2.5 text-xs w-full text-left transition-colors ${
+                        isExpanded ? "bg-gray-50" : "hover:bg-gray-50"
+                      }`}
+                      aria-expanded={isExpanded}
+                    >
+                      {isExpanded ? (
+                        <ChevronDown size={12} className="flex-none text-gray-400" />
+                      ) : (
+                        <ChevronRight size={12} className="flex-none text-gray-400" />
+                      )}
+
+                      <span className="text-gray-500 flex-none font-mono text-[11px]">
+                        {date} {time}
+                      </span>
+
+                      <span className="inline-flex items-center gap-1 flex-none">
+                        <TriggerIcon trigger={trace.trigger} />
+                        <span className="text-[11px] text-gray-600">
+                          {getTriggerLabel(trace.trigger)}
+                        </span>
+                      </span>
+
+                      <span className="inline-flex items-center gap-1 flex-none">
+                        <OutcomeIcon outcome={trace.outcome} />
+                        <span
+                          className="text-[11px] font-medium"
+                          style={{ color: getOutcomeColor(trace.outcome) }}
+                        >
+                          {getOutcomeLabel(trace.outcome)}
+                        </span>
+                      </span>
+
+                      <span className="flex-none text-gray-400 text-[10px] ml-auto">
+                        {trace.segment_count} segment{trace.segment_count !== 1 ? "s" : ""}
+                      </span>
+                    </button>
+
+                    {isExpanded && (
+                      <div className="border-t px-3 py-3 bg-white">
+                        <SpanTimeline
+                          segments={trace.segments}
+                          isError={trace.outcome === "error" || trace.outcome === "cancelled"}
+                        />
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}

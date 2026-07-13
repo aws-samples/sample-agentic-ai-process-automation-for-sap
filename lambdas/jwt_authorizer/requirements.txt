@@ -1,0 +1,3 @@
+# RS256 JWKS validation for external OIDC issuers (Okta/Entra/custom-oidc).
+# The Lambda runtime's boto3 does not include JWT libs.
+pyjwt[crypto]

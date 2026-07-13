@@ -1,0 +1,30 @@
+# gitleaks configuration for the Agentic ERP Automation Quickstart.
+#
+# Extends the default gitleaks ruleset and allowlists known placeholder values
+# that are intentionally present in this sample (example tfvars, Secrets Manager
+# secret shells that operators populate out-of-band). These are NOT real secrets.
+#
+# Usage:  gitleaks detect --source . --no-git
+#         gitleaks detect --source <extracted-release-dir> --no-git
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Sample placeholders — not real credentials"
+
+# Placeholder values used throughout the sample's example configs.
+regexes = [
+  # Literal "PLACEHOLDER" string (Secrets Manager secret shells filled in post-deploy)
+  '''PLACEHOLDER''',
+  # Obvious dummy Okta-style client id in the example tfvars (0oa + 1234567890abcdef)
+  '''0oa1234567890abcdef''',
+  # Generic example/dummy markers
+  '''(?i)(your[-_]?|example[-_]?|dummy[-_]?|placeholder[-_]?|changeme)''',
+]
+
+# Example/template files that legitimately contain placeholder credentials.
+paths = [
+  '''.*\.example$''',
+  '''terraform/terraform\.tfvars\.example''',
+]

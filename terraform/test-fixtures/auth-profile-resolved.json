@@ -1,0 +1,10 @@
+{
+  "profile": "entra-preview-fixture",
+  "maturity": "preview",
+  "banner": "⚠ profile 'entra-preview-fixture' is PREVIEW — architecturally supported, not verified end-to-end",
+  "inbound": {
+    "issuer_type": "entra",
+    "discovery_url": "https://login.microsoftonline.com/TENANT/v2.0/.well-known/openid-configuration",
+    "allowed_clients": ["entra-app-id"]
+  }
+}

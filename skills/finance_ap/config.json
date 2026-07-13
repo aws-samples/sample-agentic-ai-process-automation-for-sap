@@ -1,0 +1,45 @@
+{
+  "skill_id": "finance_ap",
+  "display_name": "Finance \u2014 Accounts Payable",
+  "description": "Procure-to-pay exception resolution: three-way matching, price/quantity variances, missing documents, duplicate invoices.",
+  "model_tier": "sonnet",
+  "max_turns": 45,
+  "multi_agent": false,
+  "orchestrator_tier": "haiku",
+  "specialist_tier": "sonnet",
+  "sap_service": {
+    "service": "API_SUPPLIERINVOICE_PROCESS_SRV",
+    "entities": {
+      "supplier_invoice": "A_SupplierInvoice",
+      "purchase_order": "A_PurchaseOrder",
+      "purchase_order_item": "A_PurchaseOrderItem",
+      "goods_receipt": "A_MaterialDocumentHeader"
+    }
+  },
+  "gateway_tools": [
+    "get_case_state",
+    "update_case_state",
+    "odata_create",
+    "odata_update",
+    "odata_function_import",
+    "search_sap_sops",
+    "search_sap_api_docs",
+    "send_notification",
+    "find_sap_services",
+    "get_metadata",
+    "get_service_hints",
+    "odata_read",
+    "odata_count"
+  ],
+  "process_type_to_sop": {
+    "price_variance": "finance_ap/price_variance.pdf",
+    "quantity_variance": "finance_ap/quantity_variance.pdf",
+    "uom_mismatch": "finance_ap/uom_mismatch.pdf",
+    "missing_goods_receipt": "finance_ap/missing_goods_receipt.pdf",
+    "missing_purchase_order": "finance_ap/missing_purchase_order.pdf",
+    "duplicate_invoice": "finance_ap/duplicate_invoice.pdf",
+    "invoice_matching": "finance_ap/invoice_matching.pdf",
+    "three_way_match": "finance_ap/invoice_matching.pdf",
+    "ap_exception": "finance_ap/invoice_matching.pdf"
+  }
+}

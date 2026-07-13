@@ -1,0 +1,33 @@
+[
+  {
+    "name": "send_notification",
+    "description": "Send a notification to a person or team via the configured channel (SES email, ServiceNow incident, Jira issue, or Slack message). Use for inquiry emails, approval requests, confirmations, and escalations. The recipient format depends on the channel: email address (SES), assignment group (ServiceNow), project key (Jira), or channel ID (Slack).",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "recipient": {
+          "type": "string",
+          "description": "Who to notify — email address, ServiceNow group, Jira project key, or Slack channel"
+        },
+        "subject": {
+          "type": "string",
+          "description": "Notification subject / short description"
+        },
+        "body": {
+          "type": "string",
+          "description": "Notification body content (plain text)"
+        },
+        "case_id": {
+          "type": "string",
+          "description": "Case ID for correlation (optional)"
+        },
+        "priority": {
+          "type": "string",
+          "enum": ["high", "medium", "low"],
+          "description": "Notification priority (default: medium)"
+        }
+      },
+      "required": ["recipient", "subject", "body"]
+    }
+  }
+]

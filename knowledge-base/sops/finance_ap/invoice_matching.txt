@@ -1,0 +1,154 @@
+INVOICE THREE-WAY MATCHING EXCEPTION RESOLUTION
+STANDARD OPERATING PROCEDURE (SOP)
+Version 1.0
+
+================================================================================
+PURPOSE
+================================================================================
+
+This SOP defines the process for resolving three-way matching exceptions in
+SAP S/4HANA. Three-way matching validates that the purchase order, goods
+receipt, and supplier invoice agree on quantity, price, and terms before
+payment is released.
+
+================================================================================
+EXCEPTION TYPES
+================================================================================
+
+1. QUANTITY VARIANCE
+   - Invoice quantity differs from goods receipt quantity
+   - Tolerance: ±5% or ±10 units (whichever is greater)
+   - Above tolerance: requires buyer approval
+
+2. PRICE VARIANCE
+   - Invoice unit price differs from PO unit price
+   - Tolerance: ±2% or ±$0.50 (whichever is greater)
+   - Above tolerance: requires procurement approval
+
+3. MISSING GOODS RECEIPT
+   - Invoice received but no goods receipt posted
+   - Check if goods are in transit or receipt is pending
+   - Escalate to warehouse/receiving after 5 business days
+
+4. PO NOT FOUND
+   - Invoice references a PO that does not exist or is closed
+   - Verify PO number with vendor
+   - Check for typos, leading zeros, or alternate PO formats
+
+5. DUPLICATE INVOICE
+   - Invoice number already exists for this vendor
+   - Verify with vendor whether this is a true duplicate or resubmission
+   - Check for partial payments on original
+
+================================================================================
+STEP 1: GATHER DATA
+================================================================================
+
+Retrieve from SAP:
+- Invoice header: vendor, amount, currency, invoice date, reference
+- Invoice line items: PO reference, quantity, unit price, GL account
+- PO header and line items: ordered quantity, net price, delivery terms
+- Goods receipt documents: received quantity, posting date, movement type
+- Prior invoices for same PO line (to detect duplicates/partials)
+
+================================================================================
+STEP 2: IDENTIFY EXCEPTION TYPE
+================================================================================
+
+Compare invoice vs PO vs goods receipt:
+- Quantity variance = |invoice_qty - gr_qty| / gr_qty
+- Price variance = |invoice_price - po_price| / po_price
+- Check goods receipt existence
+- Check for duplicate invoice numbers
+
+================================================================================
+STEP 3: APPLY RESOLUTION LOGIC
+================================================================================
+
+FOR QUANTITY VARIANCE:
+  IF within tolerance → auto-accept, post invoice
+  IF above tolerance AND invoice_qty < gr_qty → auto-accept (under-delivery)
+  IF above tolerance AND invoice_qty > gr_qty → escalate to buyer
+    Send an approval request email to {{CONTACT_PROCUREMENT}} with PO#, invoice#, qty difference, and $ impact
+    STOP processing — the recipient's reply will trigger the next step automatically
+    If approved: proceed with invoice posting
+    If denied: mark case for manual review
+
+FOR PRICE VARIANCE:
+  IF within tolerance → auto-accept, post invoice
+  IF above tolerance → escalate to procurement
+
+    IF a contract or blanket agreement is referenced on the PO →
+      Send an email to {{CONTACT_PROCUREMENT}} asking which contract terms or pricing tier applies
+      Include: PO#, invoice#, PO price, invoice price, contract/agreement reference
+      STOP processing — the recipient's reply will trigger the next step automatically
+      When procurement responds: use the clarified pricing to determine whether the variance is valid
+    OTHERWISE →
+      Send an approval request email to {{CONTACT_PROCUREMENT}} with PO#, invoice#, price difference, and contract ref
+      STOP processing — the recipient's reply will trigger the next step automatically
+    If approved or PO amended: proceed with invoice posting
+    If denied: mark case for manual review
+
+FOR MISSING GOODS RECEIPT:
+  Check delivery tracking / ASN data
+  IF goods in transit → hold invoice, set reminder for 3 business days
+  IF no tracking data AND ≤5 business days →
+    Send an email to {{CONTACT_WAREHOUSE}} asking them to confirm received quantities and expected receipt date
+    Include: PO#, invoice#, vendor name, expected delivery date from PO
+    STOP processing — the recipient's reply will trigger the next step automatically
+    When the warehouse responds: use their confirmed quantities to continue resolution
+  IF >5 business days with no receipt → escalate to procurement
+
+FOR PO NOT FOUND:
+  Verify PO number format (add leading zeros, check company code)
+  IF PO found after correction → reprocess
+  IF PO truly missing →
+    Send an email to {{CONTACT_PROCUREMENT}} asking them to provide the correct PO number or confirm whether a new PO is needed
+    Include: invoice#, vendor name, vendor's PO reference, invoice amount, line item descriptions
+    STOP processing — the recipient's reply will trigger the next step automatically
+    When the buyer responds: use the provided PO reference to continue resolution
+
+FOR DUPLICATE INVOICE:
+  Compare amounts, dates, line items with original
+  IF exact duplicate → reject, notify vendor
+  IF different amounts → may be partial/corrective, escalate to AP team
+
+================================================================================
+STEP 4: EXECUTE RESOLUTION
+================================================================================
+
+- Park invoice first, then post after approval
+- To release a blocked invoice after approval, use the Release function import
+- To post a parked invoice, use the Post function import
+- Update case state at each step
+- After each SAP write, poll get_case_state until last_sap_write_status is SUCCESS or FAILED
+- If FAILED: update case to 'error', notify AP team with error details, STOP
+- Send confirmation notifications per SOP only after write SUCCESS, using document numbers from last_sap_write_response
+- Document all decisions in processing history
+
+================================================================================
+STEP 5: CLOSE CASE
+================================================================================
+
+- Verify all line items resolved
+- Update case status to 'complete'
+- Send summary notification to relevant stakeholders
+
+================================================================================
+CONTACTS
+================================================================================
+
+- AP Team: {{CONTACT_AP_TEAM}}
+- Procurement: {{CONTACT_PROCUREMENT}}
+- Warehouse/Receiving: {{CONTACT_WAREHOUSE}}
+- Finance Approvals: {{CONTACT_FINANCE_APPROVALS}}
+
+================================================================================
+TOLERANCES (CONFIGURABLE)
+================================================================================
+
+| Type     | Percentage | Absolute  | Rule              |
+|----------|-----------|-----------|-------------------|
+| Quantity | ±5%       | ±10 units | Whichever greater |
+| Price    | ±2%       | ±$0.50    | Whichever greater |
+| Amount   | ±$100     | N/A       | Per line item     |

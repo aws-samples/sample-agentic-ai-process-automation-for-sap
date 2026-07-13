@@ -1,0 +1,145 @@
+# Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+# SPDX-License-Identifier: Apache-2.0
+# =============================================================================
+# =============================================================================
+
+output "cognito_user_pool_id" {
+  description = "Cognito User Pool ID"
+  value       = module.cognito.user_pool_id
+}
+
+output "cognito_web_client_id" {
+  description = "Cognito Web Client ID (for frontend)"
+  value       = module.cognito.web_client_id
+}
+
+output "cognito_machine_client_id" {
+  description = "Cognito Machine Client ID (for M2M authentication)"
+  value       = module.backend.machine_client_id
+}
+
+output "cognito_domain_url" {
+  description = "Cognito domain URL for OAuth"
+  value       = module.cognito.cognito_domain_url
+}
+
+# =============================================================================
+# =============================================================================
+output "amplify_app_id" {
+  description = "Amplify App ID"
+  value       = module.amplify_hosting.app_id
+}
+
+output "amplify_app_url" {
+  description = "Amplify App URL (frontend)"
+  value       = module.amplify_hosting.app_url
+}
+
+output "amplify_staging_bucket" {
+  description = "S3 bucket for frontend staging deployments"
+  value       = module.amplify_hosting.staging_bucket_name
+}
+
+# =============================================================================
+# =============================================================================
+output "memory_arn" {
+  description = "AgentCore Memory ARN"
+  value       = module.backend.memory_arn
+}
+# =============================================================================
+# =============================================================================
+
+output "gateway_id" {
+  description = "AgentCore Gateway ID"
+  value       = module.backend.gateway_id
+}
+
+output "gateway_arn" {
+  description = "AgentCore Gateway ARN"
+  value       = module.backend.gateway_arn
+}
+
+output "gateway_url" {
+  description = "AgentCore Gateway URL"
+  value       = module.backend.gateway_url
+}
+
+# =============================================================================
+# =============================================================================
+output "runtime_id" {
+  description = "AgentCore Runtime ID"
+  value       = module.backend.runtime_id
+}
+
+output "runtime_arn" {
+  description = "AgentCore Runtime ARN"
+  value       = module.backend.runtime_arn
+}
+
+output "runtime_role_arn" {
+  description = "AgentCore Runtime execution role ARN"
+  value       = module.backend.runtime_role_arn
+}
+
+# =============================================================================
+# =============================================================================
+output "feedback_api_url" {
+  description = "Feedback API Gateway URL"
+  value       = module.backend.feedback_api_url
+}
+
+output "demo_api_url" {
+  description = "Demo API Gateway URL (null when demo_enabled is false)"
+  value       = module.backend.demo_api_url
+}
+
+# =============================================================================
+# =============================================================================
+output "ssm_parameter_prefix" {
+  description = "SSM parameter prefix for this deployment"
+  value       = local.ssm_parameter_prefix
+}
+# =============================================================================
+# =============================================================================
+
+output "deployment_summary" {
+  description = "Summary of deployed resources"
+  value = {
+    stack_name      = var.stack_name_base
+    region          = local.region
+    account_id      = local.account_id
+    deployment_type = var.backend_deployment_type
+    frontend_url    = module.amplify_hosting.app_url
+    gateway_url     = module.backend.gateway_url
+    api_url         = module.backend.feedback_api_url
+  }
+}
+
+# =============================================================================
+# =============================================================================
+output "sops_knowledge_base_id" {
+  description = "Bedrock Knowledge Base ID for SOPs"
+  value       = module.knowledge_base.sops_kb_id
+}
+
+output "api_docs_knowledge_base_id" {
+  description = "Bedrock Knowledge Base ID for API docs"
+  value       = module.knowledge_base.api_docs_kb_id
+}
+# =============================================================================
+# =============================================================================
+
+output "sap_credentials_secret_arn" {
+  description = "SAP credentials Secrets Manager ARN"
+  value       = module.backend.sap_credentials_secret_arn
+}
+
+output "cases_table_name" {
+  description = "Cases DynamoDB table name"
+  value       = module.backend.cases_table_name
+}
+
+output "tickets_table_name" {
+  description = "Tickets DynamoDB table name"
+  value       = module.backend.tickets_table_name
+}
