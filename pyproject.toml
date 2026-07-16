@@ -46,7 +46,7 @@ dev = ["pytest>=7.0.0", "ruff>=0.1.0", "mypy>=1.0.0"]
 agent-strands = [
     "strands-agents==1.24.0",
     "strands-agents-tools>=0.2.20",
-    "mcp==1.26.0",
+    "mcp==1.27.2",
     "bedrock-agentcore[strands-agents]==1.2.0",
     "PyJWT[crypto]>=2.10.1",
     "httptools>=0.6.0",
