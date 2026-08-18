@@ -22,11 +22,13 @@ autonomous OData poller is the only component that calls SAP directly.
 4. [SAP MCP Integration](SAP_MCP_INTEGRATION.md) — the external AWS for SAP MCP server (Gateway
    target + OAuth2 provider adapter); machine-identity `BASIC`/`M2M` flows.
 
-> **Deploys today vs preview.** Only the `cognito-basic` (default) and `cognito-m2m` auth profiles
-> have built IaC and deploy end-to-end — items 1–4 above cover them. The interactive per-user paths
-> below (items 5–10, the `preview_profiles` in `auth-profiles.yaml`) are **preview**: the topology is
-> modeled and validated, but the provisioning modules are not built yet. Treat those runbooks as
-> reference designs for the roadmap, not ready-to-run procedures.
+> **Deploys today vs preview.** The `profiles:` block in `auth-profiles.yaml` is the live list —
+> currently `cognito-basic` (default), `cognito-m2m`, `cognito-m2m-batch`, `entra-obo`, and
+> `okta-basic`. Items 1–4 above cover the machine-identity ones. Only the `preview_profiles:` block
+> (items 5–10 below) is **preview**: the topology is modeled and validated, but at least one axis
+> isn't deployable end to end. Treat those runbooks as reference designs for the roadmap, not
+> ready-to-run procedures. Deployable ≠ proven against live SAP — see
+> [Promoting an Auth Profile](PROFILE_PROMOTION.md) for the two separate gates.
 
 If you need interactive per-user SAP auth:
 
@@ -59,5 +61,6 @@ index. In brief:
 - [BTP Hosting Options](BTP_HOSTING.md) — deploying when SAP runs on BTP (Option A supported;
   B/C out of scope for this release).
 - [Okta Setup](OKTA_SETUP.md) — Okta (Entra's sibling) inbound + direct-IdP frontend customer
-  setup for the `okta-userfed` path (Okta inbound, reusing the Okta OIDC outbound); same generic
-  machinery, config-only.
+  setup; same generic machinery as Entra, config-only. Start with `okta-basic`, which is
+  CDK-supported — its two Okta axes were proven by a real login. `okta-userfed` adds per-user
+  SAP identity but its outbound is blocked upstream.

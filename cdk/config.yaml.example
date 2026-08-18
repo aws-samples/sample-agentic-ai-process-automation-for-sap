@@ -1,0 +1,253 @@
+# Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+# ── Required ──────────────────────────────────────────────────────────────
+
+stack_name_base: erp-accrual-agent  # Max 35 chars, no underscores (use hyphens)
+admin_user_email:                   # Example: admin@example.com
+
+# ── Backend ───────────────────────────────────────────────────────────────
+
+backend:
+  pattern: agent           # Strands agent (default)
+  deployment_type: zip     # zip (default, no Docker needed) | docker (requires Docker/Finch)
+  network_mode: PUBLIC     # PUBLIC | VPC
+
+  # Required when network_mode: VPC
+  # vpc:
+  #   vpc_id: vpc-0abc1234def56789a
+  #   subnet_ids:
+  #     - subnet-aaaa1111bbbb2222c
+  #     - subnet-cccc3333dddd4444e
+  #   security_group_ids:
+  #     - sg-0abc1234def56789a
+
+# ── Authentication profile ───────────────────────────────────────────────
+
+# Selects the identity topology across frontend, inbound, mode, and outbound axes.
+# Default 'cognito-basic' works out of the box with no external IdP.
+# See auth-profiles.yaml and docs/sap/AUTH_PROFILE_SELECTION.md.
+auth_profile: cognito-basic
+
+# inbound_overrides:   # entra/okta inbound only — external IdP values, known pre-deploy
+#   discovery_url: https://login.microsoftonline.com/<tenant>/v2.0/.well-known/openid-configuration
+#   allowed_clients:
+#     - <app-client-id>
+
+# frontend_overrides:   # direct-entra / direct-okta frontends only (see auth-profiles.yaml axes.frontend).
+#                       # Drives the SPA's OIDC login issuer. Omit for cognito / cognito+federated.
+#   discovery_url: https://login.microsoftonline.com/<tenant>/v2.0/.well-known/openid-configuration
+#   # discovery_url is passed to the SPA verbatim as metadata_url (oidc-client-ts fetches it directly).
+#   client_id: <spa-app-client-id>
+#   scope: email openid profile offline_access   # optional; omit to keep the "email openid profile" default
+
+# ── SAP ───────────────────────────────────────────────────────────────────
+
+sap:
+  # SAP OData endpoint URL
+  # base_url: https://my-sap-host.example.com:443
+
+  # SAP machine identity is service-account (Basic Auth from Secrets Manager):
+  # the OData poller is the only component that calls SAP directly. Interactive
+  # agent SAP access — reads AND writes — goes through the external AWS-for-SAP
+  # MCP server, so there is no per-user SAP identity mode to configure here.
+
+  # "Same sub" OBO federation — IAS consumes the user-facing Cognito pool as an
+  # OIDC corporate IdP so SAP MCP USER_FEDERATION calls reach SAP as the real user.
+  # See docs/sap/SAP_MCP_SAME_SUB_FEDERATION.md.
+  # identity:
+  #   federation:
+  #     enabled: true
+  #     ias_redirect_uri: "https://<tenant>.accounts.ondemand.com/oauth2/callback"
+  #     mapping_claim: email   # default: email
+
+  # OData poller schedule (EventBridge rate expression)
+  poller_schedule: rate(5 minutes)
+
+  # Bedrock embedding model for Knowledge Bases (text → vectors for S3 Vectors store)
+  embedding_model: amazon.titan-embed-text-v2:0
+
+# ── Knowledge Base / SOP Chunking ────────────────────────────────────────
+# Controls how SOP documents are chunked when ingested into the SOPs vector KB
+# that backs the `search_sap_sops` tool. The agent's PRIMARY procedure comes
+# from the skill router (whole SOP injected deterministically) — this only
+# affects the secondary vector-search tool. See docs/design-decisions/
+# 014-sop-corpus-chunking.md for how to choose.
+#
+# knowledge_base:
+#   # BEDROCK_DEFAULT: omit explicit chunking configuration. Use only to preserve
+#   #   a legacy data source originally created without VectorIngestionConfiguration;
+#   #   new data sources use Bedrock's service default.
+#   # NONE (default): one vector per SOP → whole-SOP retrieval, never fragments
+#   #   mixed across SOPs. Requires each SOP to fit the embedding input limit
+#   #   (Titan v2 ≈ 8k tokens / 50k chars). Best for short/atomic SOPs.
+#   # FIXED_SIZE: ~maxTokens chunks with overlap — for long SOPs over the limit.
+#   # SEMANTIC: structure-aware chunks — for long, well-sectioned SOPs.
+#   sops_chunking_strategy: NONE
+#   sops_chunk_max_tokens: 300          # FIXED_SIZE / SEMANTIC
+#   sops_chunk_overlap_percentage: 20   # FIXED_SIZE only
+
+# ── Agent Knowledge (precedent + vendor risk) ────────────────────────────────
+# Deterministic precedent retrieval and vendor-relationship traversal for the
+# AP agent, backed by ONE Aurora Serverless v2 PostgreSQL cluster reached over
+# the RDS Data API (the tool Lambda stays out of the VPC).
+#
+# Default OFF. Leaving this commented out provisions nothing — no cluster, no
+# VPC, no Gateway tool — so `make setup` cost and duration are unchanged.
+#
+# agent_knowledge:
+#   enabled: false
+#   # 0 auto-pauses the cluster to ~$0 idle, at the cost of a ~15s resume on the
+#   # first call after a pause. Fine for poller-driven batches, visible in a live
+#   # demo. Set 0.5 (~$43/mo us-east-1) to remove the stall.
+#   min_acu: 0
+#   seconds_until_auto_pause: 3600   # RDS accepts 300–86400
+#   vendor_risk: true                # vendor edge tables + check_vendor_risk tool
+
+# ── Notification Channel ─────────────────────────────────────────────────
+# How the agent communicates outbound (inquiries, approvals, confirmations).
+
+# notification:
+#   channel: ses  # ses | servicenow | jira
+#   ses_sender_email: accrual-agent@example.com
+#   # For servicenow/jira, store creds in Secrets Manager:
+#   # secret_arn: arn:aws:secretsmanager:us-east-1:123456789:secret:my-creds
+#   # Webhook signing secret is stored in the same Secrets Manager secret
+#   # (key: webhook_secret). Use sync-channel-secret.sh to set it.
+
+# ── Alarms ────────────────────────────────────────────────────────────────
+
+# alarm_email: ops-team@example.com  # CloudWatch alarm notifications (optional)
+
+# ── Autonomy Controls ────────────────────────────────────────────────────
+# Flippable at runtime via SSM, frontend toggle, or scripts/ops/autonomy.sh.
+
+autonomy:
+  trigger_mode: manual     # auto = poller enqueues immediately | manual = human triggers from UI/CLI
+
+# ── Batch Sweeper ────────────────────────────────────────────────────────
+# Only provisioned when the selected auth_profile carries `mode: batch`
+# (e.g. cognito-m2m-batch). Sweeps cases the poller never enqueued.
+
+# batch:
+#   schedule: rate(1 hour)   # any EventBridge schedule expression; this is the default
+
+# ── Cedar Policy Engine ──────────────────────────────────────────────────
+
+cedar_enforcement_mode: LOG_ONLY  # LOG_ONLY | ENFORCE
+
+# ── Optional Security Hardening ──────────────────────────────────────────
+# Both default OFF so the sample deploys cheaply; enable in production.
+#
+# security:
+#   waf_enabled: false          # T1/T11 — REGIONAL WAFv2 on the API stage
+#                               #   (per-IP rate limit + AWS managed rule groups)
+#   guardrail_enabled: false    # T2/T15 — Bedrock Guardrail on the agent model
+#                               #   (PROMPT_ATTACK + content/topic filters + PII anonymization)
+#   audit_trail_enabled: false  # M7 — CloudTrail trail + autonomy-change alarm.
+#                               #   NOTE: CloudTrail allows only 5 trails per Region and that
+#                               #   is a hard limit, not a raisable quota. Each deployment with
+#                               #   this on consumes one slot, so leave it off for sample and
+#                               #   test deployments and enable it in the environment you audit.
+
+# ── AWS for SAP MCP Server (how the agent reaches SAP) ───────────────────
+# See ADR-012 and docs/sap/SAP_MCP_INTEGRATION.md.
+#
+# The agent's SAP access (reads + writes + discovery) goes through the external
+# AWS-published SAP MCP server. This integration is a PURE ADAPTER: you deploy
+# AWS's SAP MCP CloudFormation stack yourself, then reference it here. That stack
+# owns the runtime, its inbound Cognito/Entra pool, the outbound SAP OAuth
+# provider, AND every SAP permission knob — read vs write enablement is set
+# THERE via the runtime's MCP_SERVER_* env vars (MCP_SERVER_WRITE_ENABLED +
+# per-op MCP_SERVER_CREATE/UPDATE/DELETE/FUNCTION_IMPORT_ENABLED). See:
+# https://docs.aws.amazon.com/mcp-sap/latest/awsforsapmcp/configuration-reference.html
+#
+# Our CDK only mints the Gateway target pointed at it. Gateway-side, Cedar
+# policies govern writes (role gate on create/update/function_import;
+# odata_delete forbidden); there is no action-mode kill-switch (threat T6).
+#
+# The active SAP MCP target variant (Service / User) is DERIVED from auth_profile's
+# outbound axis (see auth-profiles.yaml): m2m-* → Service, user-federation → User,
+# basic → neither. Do not set service/user enabled flags here — the profile decides.
+
+# sap_mcp:
+#   enabled: false
+#   # enabling this activates the emit-time OBO / mcp_supported guard (an OBO profile aborts at synth).
+#   external_stack:
+#     stack_name: sap-mcp-server-prod
+#     region: us-east-1               # region of the external stack; defaults to deploy region
+#     inbound_auth_provider: Cognito  # Cognito | EntraId (must match the CFN deploy)
+#     # OAuth scopes the Gateway requests for the inbound token to the external
+#     # runtime. For the AWS-published stack these are its M2M resource-server
+#     # scopes (e.g. awsforsap-mcp-m2m-resource-server-<id>/read and /write).
+#     # For inbound_auth_provider: EntraId the shape is different — a
+#     # client_credentials grant against Entra takes exactly one
+#     # "<App ID URI>/.default" scope; a Cognito-style "<pool>/read" is rejected
+#     # with a 400 the Gateway reports as "Error parsing ClientCredentials
+#     # response". Use the App ID URI of the app in the runtime's AllowedAudiences.
+#     inbound_scopes:
+#       - "awsforsap-mcp-m2m-resource-server-XXXX/read"
+#       - "awsforsap-mcp-m2m-resource-server-XXXX/write"
+#     # Outputs (invocation_url, pool/client/token endpoint) auto-resolve at synth
+#     # via CloudFormation describe-stacks; only the client secret ARN is required.
+#     # It MUST be the COMPLETE ARN, including the 6-character suffix Secrets
+#     # Manager appends — a name-only ARN resolves to nothing, and the deploy then
+#     # fails with a misleading AccessDenied on GetSecretValue rather than a
+#     # not-found. Synth pre-checks this (assertSecretResolves).
+#     inbound_cognito:
+#       client_secret_arn: "arn:aws:secretsmanager:us-east-1:ACCT:secret:ext-cognito-XXXX-AbCdEf"
+#     # EntraId inbound uses these three instead of inbound_cognito:
+#     entra_discovery_url: "https://login.microsoftonline.com/TENANT/v2.0/.well-known/openid-configuration"
+#     entra_client_id: "APP-GUID"
+#     entra_client_secret_arn: "arn:aws:secretsmanager:us-east-1:ACCT:secret:entra-XXXX-AbCdEf"
+#     # T13: allowlist of regex the resolved MCP invocation URL MUST match at
+#     # synth, else the deploy aborts. Unset = https-only. Set in prod to pin
+#     # the Gateway to your known MCP host (Production checklist item 7).
+#     allowed_endpoint_patterns:
+#       - "^https://sap-mcp-server-prod\\.example\\.com/"
+#
+#   listing_mode: DEFAULT             # DEFAULT (pre-syncs catalog) | DYNAMIC (per-session)
+
+# ── Agent Queue ───────────────────────────────────────────────────────────
+
+# agent_queue:
+#   max_concurrency: 5
+
+# ── Demo Infrastructure ──────────────────────────────────────────────────
+# Two independent, opt-in demo features. Leave both off for a clean production
+# base; enable either to explore the sample. `demo.enabled: true` is sugar that
+# turns BOTH on (backwards compat with the old single flag).
+#
+#   demo.ticketing.enabled  → ticket-management demo: tickets table, /tickets API
+#     + approve/deny resume flow, demo_ticket_management Gateway tool, frontend
+#     Tickets tab. A stand-in for a production ITSM (ServiceNow/Jira).
+#   demo.test_data.enabled  → test-data stack: demo_test_data Lambda + /demo/*
+#     API, frontend Test Data tab.
+#
+# example_* skills (finance_accruals) reference the ticketing tools AND process
+# test data, so they load only when BOTH are on (i.e. demo.enabled: true).
+# With everything off, the demo assets can be deleted outright (lambdas/demo_*,
+# agentcore/gateway/tools/demo_*, agentcore/gateway/tools/example_*, skills/example_*).
+
+# demo:
+#   ticketing:
+#     enabled: false
+#   test_data:
+#     enabled: false
+#   # or, equivalently, enable both:
+#   # enabled: true
+
+# ── Contact Directory ────────────────────────────────────────────────────
+# Referenced as {{CONTACT_<KEY>}} in SOP files.
+
+contacts:
+  po_owner:            # po-owner@example.com
+  finance_team:        # finance@example.com
+  technical_support:   # support@example.com
+  ap_team:             # ap-team@example.com
+  procurement:         # procurement@example.com
+  warehouse:           # warehouse@example.com
+  finance_approvals:   # finance-approvals@example.com
+  ar_team:             # ar-team@example.com
+  treasury:            # treasury@example.com
+  customer_service:    # customer-service@example.com

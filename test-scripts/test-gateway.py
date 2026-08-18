@@ -7,7 +7,7 @@
 Test AgentCore Gateway directly without frontend.
 
 Usage:
-    uv run scripts/test-gateway.py
+    uv run test-scripts/test-gateway.py
 """
 
 import json

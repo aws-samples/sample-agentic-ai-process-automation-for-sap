@@ -14,7 +14,7 @@
     "priority":    { "$ref": "#/definitions/TicketPriority" },
     "created_by":  { "type": ["string", "null"], "description": "User or agent that created the ticket." },
     "assigned_to": { "type": ["string", "null"], "description": "Person or team assigned to the ticket." },
-    "case_id":     { "type": ["string", "null"], "description": "Related ERP case ID for correlation (doc#item format)." },
+    "case_id":     { "type": ["string", "null"], "description": "Related ERP case identity for correlation, canonical {document_number}-{item_id} form. Built and parsed only via the case_key codec." },
     "category":    { "type": ["string", "null"], "description": "Ticket category (e.g. approval_request, exception, inquiry)." },
     "response_type": { "type": "string", "enum": ["approval", "free_text"], "default": "approval", "description": "Expected response type: 'approval' shows approve/deny buttons, 'free_text' shows a reply textarea." },
     "resolution":  { "type": ["string", "null"], "description": "Resolution notes." },

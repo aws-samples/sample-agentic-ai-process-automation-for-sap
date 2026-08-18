@@ -50,5 +50,5 @@ Skills opt into these tools by listing them in their `gateway_tools` array (see 
 | `cdk/lib/backend-stack.ts` → `createSapSecrets()` | Creates the secret + SSM param |
 | `lambdas/odata_poller/` | Service-account poller — the only direct SAP caller |
 | `lambdas/odata_poller/domains/*.json` | Per-domain poll configs (e.g. `example_finance_accruals.json`, `finance_ap.json`) |
-| `scripts/sync-sap-secret.sh` | Sync credentials to Secrets Manager (`make sync-sap-secret`) |
+| `python3 launch.py sync-sap` | Sync credentials to Secrets Manager (also `make sync-sap-secret`) |
 | `docs/sap/` | External MCP server setup + USER_FEDERATION for interactive auth |

@@ -100,13 +100,19 @@ export class SapMcpStack extends cdk.Stack {
     // Synth-time coherence guard: our resolved outbound flow must agree with the
     // external stack's declared inbound. A mismatch here would only surface at
     // runtime as a generic "An internal error occurred" — fail loud now.
+    // Inbound (which IdP mints the token the runtime accepts) and outbound (which
+    // flow the runtime uses toward SAP) are independent parameters on the external
+    // stack. An Entra-inbound runtime can carry AuthFlow=BASIC — that is the
+    // auth-matrix verification shape — so only AuthFlow may decide OBO here.
     const externalIsEntra = externalStack.inboundAuthProvider === "EntraId"
-    const externalIsObo = externalStack.authFlow === "OBO" || externalIsEntra
+    const externalIsObo = externalStack.authFlow === "ON_BEHALF_OF_TOKEN_EXCHANGE"
     // OUR side is OBO iff the artifact carries the purpose-built obo_direct_mcp
     // boolean. Do NOT key on flow === "OBO" — the emitted flow token is
     // "ON_BEHALF_OF_TOKEN_EXCHANGE" (mcp_oauth_flow), never the literal "OBO".
     const weAreObo = oboDirectMcp === true
-    if (weAreObo && !externalIsObo) {
+    // OBO needs BOTH legs: the exchange flow outbound, and Entra inbound to accept
+    // the user's JWT. Neither implies the other.
+    if (weAreObo && !(externalIsObo && externalIsEntra)) {
       throw new Error(
         `Outbound flow resolves to OBO (direct-to-MCP) but the external SAP MCP stack declares ` +
           `AuthFlow='${externalStack.authFlow}' / InboundAuthProvider='${externalStack.inboundAuthProvider}'. ` +

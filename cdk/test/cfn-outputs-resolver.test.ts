@@ -1,11 +1,13 @@
 // Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
+import { SecretsManagerClient } from "@aws-sdk/client-secrets-manager"
 import {
   mapExternalStackInfo,
   RawStackDescription,
   chooseStackRegion,
   validateInvocationUrl,
+  assertSecretResolves,
 } from "../lib/utils/cfn-outputs-resolver"
 
 describe("chooseStackRegion", () => {
@@ -45,14 +47,14 @@ describe("mapExternalStackInfo", () => {
 
   test("derives IdP-neutral inbound fields for the Cognito path", () => {
     const info = mapExternalStackInfo(RAW, {
-      inbound_cognito: { client_secret_arn: "arn:aws:secretsmanager:us-east-1:111122223333:secret:cog" },
+      inbound_cognito: { client_secret_arn: "arn:aws:secretsmanager:us-east-1:111122223333:secret:cog-Ab12Cd" },
     })
     expect(info.inboundClientId).toBe("client123")
     expect(info.inboundDiscoveryUrl).toBe(
       "https://cognito-idp.us-east-1.amazonaws.com/us-east-1_ABC/.well-known/openid-configuration"
     )
     expect(info.inboundClientSecretArn).toBe(
-      "arn:aws:secretsmanager:us-east-1:111122223333:secret:cog"
+      "arn:aws:secretsmanager:us-east-1:111122223333:secret:cog-Ab12Cd"
     )
   })
 
@@ -81,7 +83,7 @@ describe("mapExternalStackInfo", () => {
         entra_discovery_url:
           "https://login.microsoftonline.com/tenant/v2.0/.well-known/openid-configuration",
         entra_client_id: "entra-client",
-        entra_client_secret_arn: "arn:aws:secretsmanager:us-east-1:111122223333:secret:entra",
+        entra_client_secret_arn: "arn:aws:secretsmanager:us-east-1:111122223333:secret:entra-client-secret",
       }
     )
     expect(info.inboundAuthProvider).toBe("EntraId")
@@ -90,7 +92,7 @@ describe("mapExternalStackInfo", () => {
     )
     expect(info.inboundClientId).toBe("entra-client")
     expect(info.inboundClientSecretArn).toBe(
-      "arn:aws:secretsmanager:us-east-1:111122223333:secret:entra"
+      "arn:aws:secretsmanager:us-east-1:111122223333:secret:entra-client-secret"
     )
   })
 
@@ -160,5 +162,55 @@ describe("validateInvocationUrl (T13)", () => {
   })
   test("throws a clear error on an invalid regex pattern", () => {
     expect(() => validateInvocationUrl("https://rt/invoke", ["(unclosed"])).toThrow(/Invalid regex/)
+  })
+})
+
+describe("assertSecretResolves", () => {
+  // Cast: send()'s overloads resolve its arg type to `never` under spyOn.
+  const sendSpy = jest.spyOn(
+    SecretsManagerClient.prototype,
+    "send"
+  ) as unknown as jest.SpyInstance
+  afterEach(() => sendSpy.mockReset())
+  afterAll(() => sendSpy.mockRestore())
+
+  const notFound = Object.assign(new Error("Secrets Manager can't find the specified secret."), {
+    name: "ResourceNotFoundException",
+  })
+
+  // Regression: this exact truncated ARN shipped in config.yaml and cost a deploy.
+  // A string check can't catch it — "dzuf01" is itself six alphanumerics, so the
+  // truncated ARN is indistinguishable from a complete one.
+  test("rejects an identifier that resolves to no secret", async () => {
+    sendSpy.mockRejectedValue(notFound)
+    await expect(
+      assertSecretResolves(
+        "arn:aws:secretsmanager:us-east-1:111122223333:secret:entra-obo-exchange-client-secret-dzuf01",
+        "us-east-1"
+      )
+    ).rejects.toThrow(/resolves to no secret/)
+  })
+
+  test("accepts an identifier that resolves", async () => {
+    sendSpy.mockResolvedValue({} as never)
+    await expect(
+      assertSecretResolves(
+        "arn:aws:secretsmanager:us-east-1:111122223333:secret:entra-obo-exchange-client-secret-dzuf01-KRbD6g"
+      )
+    ).resolves.toBeUndefined()
+  })
+
+  // The deployer may legitimately lack DescribeSecret; that says nothing about
+  // whether the identifier is valid, so synth must not fail on it.
+  test("does not block synth on a non-not-found error", async () => {
+    sendSpy.mockRejectedValue(
+      Object.assign(new Error("denied"), { name: "AccessDeniedException" })
+    )
+    await expect(assertSecretResolves("some-secret")).resolves.toBeUndefined()
+  })
+
+  test("skips the lookup entirely when no ARN is configured", async () => {
+    await expect(assertSecretResolves(undefined)).resolves.toBeUndefined()
+    expect(sendSpy).not.toHaveBeenCalled()
   })
 })

@@ -9,7 +9,7 @@ This guide walks you through deploying the Agentic ERP Automation Quickstart pla
 
 > **Terraform alternative:** See the [Terraform Deployment Guide](TERRAFORM_DEPLOYMENT.md). We recommend choosing one IaC tool and deleting the other directory (`cdk/` or `terraform/`).
 
-> **Auth profiles require the CDK backend.** `make setup` and every non-default auth profile
+> **Auth profiles require the CDK backend.** The guided launcher and every non-default auth profile
 > (Entra/Okta inbound, M2M/OBO/user-federation outbound, direct-IdP frontend) are CDK-only.
 > Terraform deploys `cognito-basic` only and loud-fails any other profile at `terraform plan`.
 > Testing an auth-matrix permutation? Use CDK. See [Auth Profile Selection](../sap/AUTH_PROFILE_SELECTION.md#terraform-scope).
@@ -17,9 +17,9 @@ This guide walks you through deploying the Agentic ERP Automation Quickstart pla
 ## Prerequisites
 
 - **Node.js 20+** ([install guide](https://docs.aws.amazon.com/sdk-for-javascript/v2/developer-guide/setting-up-node-on-ec2-instance.html))
-- **Python 3.12+** with **pip**
+- **Python 3.10+** with **pip**
 - **AWS CLI** configured (`aws configure`) — [setup guide](https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-quickstart.html)
-- **AWS CDK CLI**: `npm install -g aws-cdk` — [getting started](https://docs.aws.amazon.com/cdk/v2/guide/getting-started.html)
+- **No global CDK install** — the pinned version comes from `cdk/package.json`
 - An AWS account with permissions to create: S3, CloudFront, Cognito, Amplify Hosting, Bedrock AgentCore, DynamoDB, SQS, EventBridge, Lambda, IAM, SSM, Secrets Manager, and S3 Vectors resources
 - **Bedrock model access enabled** for the Claude models used by the agent, in your target region — [request model access](https://docs.aws.amazon.com/bedrock/latest/userguide/model-access.html). This is the most common first-deploy failure; requests can take a few minutes to a few hours to approve.
 
@@ -27,29 +27,41 @@ Docker/Finch is **not** required unless you set `deployment_type: docker`.
 
 ## Quick Start
 
-The guided setup walks you through everything interactively:
+Check readiness first. This is read-only — it installs nothing and creates nothing:
 
 ```bash
-make setup
+python3 launch.py doctor
 ```
 
-This runs bootstrap (prerequisites → config → CDK deploy → frontend), then prompts for SAP credentials and knowledge base sync. Allow ~20–30 minutes end-to-end on a first run (CDK deploy alone is 10–20 min) — plus any wait time for Bedrock model access approval if you haven't requested it yet.
-
-Or run the setup wizard directly:
+Then run the guided launcher:
 
 ```bash
-python scripts/setup.py
+python3 launch.py
 ```
 
-This checks prerequisites → generates `cdk/config.yaml` → installs CDK deps → `cdk bootstrap` → `cdk deploy --all` → deploys frontend → prints next steps.
+The flow is: environment check → config → **confirm the target account and Region** → CDK bootstrap and deploy → Lambda refresh → frontend → optional SAP credentials → optional knowledge base. Nothing is written to AWS before that confirmation, and it defaults to no.
+
+Allow ~20–30 minutes end-to-end on a first run (CDK deploy alone is 10–20 min), plus any wait for Bedrock model access approval if you haven't requested it yet.
+
+Each phase is also a standalone command, so you can drive them yourself:
+
+```bash
+python3 launch.py configure    # generate cdk/config.yaml
+python3 launch.py diff         # review pending changes, including IAM
+python3 launch.py infra        # bootstrap + deploy the stacks
+python3 launch.py frontend     # build and deploy the frontend
+python3 launch.py status       # what is deployed, with endpoints
+python3 launch.py resume       # continue after an interruption
+```
 
 After code changes, redeploy with:
 
 ```bash
-make deploy-all
+python3 launch.py deploy               # confirms the target first
+python3 launch.py --yes deploy         # unattended; --yes precedes the command
 ```
 
-This runs CDK deploy, refreshes all Lambdas (so they pick up new SSM values), and redeploys the frontend. Run `make` to see all available targets.
+This deploys the CDK stacks, refreshes all Lambdas (so they pick up new SSM values), and redeploys the frontend, confirming the target first. `make deploy-all` is an alias for it.
 
 Or deploy manually — see the step-by-step sections below.
 
@@ -85,7 +97,7 @@ sap:
 ```
 
 **How SAP is reached:**
-- The `odata_poller` Lambda is the only component that calls SAP directly. It uses service-account Basic Auth, with credentials read from Secrets Manager (set via `./scripts/sync-sap-secret.sh` after deploy).
+- The `odata_poller` Lambda is the only component that calls SAP directly. It uses service-account Basic Auth, with credentials read from Secrets Manager (set via `python3 launch.py sync-sap` after deploy).
 - All other SAP OData — reads, writes, and discovery — flows through the external **AWS for SAP MCP server**, configured under `sap_mcp:` in `config.yaml.example`.
 - Interactive per-user SAP access is handled by that server's USER_FEDERATION (OBO) flow — not by this project.
 
@@ -95,11 +107,11 @@ See [Connectivity & Auth](../sap/CONNECTIVITY_AND_AUTH.md) for networking detail
 
 ```yaml
 notification:
-  channel: ses                              # ses | slack | jira | servicenow
+  channel: ses                              # ses | jira | servicenow
   ses_sender_email: accrual-agent@example.com
 ```
 
-For Slack/Jira/ServiceNow, store credentials in Secrets Manager and reference via `secret_arn`.
+For Jira/ServiceNow, store credentials in Secrets Manager and reference via `secret_arn`.
 
 #### 3. Set autonomy controls
 
@@ -108,15 +120,25 @@ autonomy:
   trigger_mode: manual      # auto (poller auto-enqueues) | manual (human trigger)
 ```
 
-These are SSM-backed — changeable at runtime without redeployment via `./scripts/ops/autonomy.sh` or the frontend toggle.
+These are SSM-backed — changeable at runtime without redeployment via `python3 launch.py autonomy` or the Autonomy section in Settings. The parameter is seeded regardless of auth profile, but only an `autonomous` profile builds the poller that acts on it, so `GET /autonomy` reports `autonomous-capable` next to the mode.
 
 > **Not to be confused with the auth-profile `mode` axis.** The selected `auth_profile`
 > also carries a processing-model `mode` axis (`autonomous` / `live` / `batch`). That is a
-> deploy-time **constraint**, unrelated to the runtime `trigger_mode` knob above: it
-> provisions nothing except `batch`, which requires a token-refresh-capable outbound
-> (enforced before deploy) and a **batch runner that is not implemented in this sample** —
-> selecting a `batch` profile fails at synth with a clear message. `autonomous` and `live`
-> provision nothing and are the default paths.
+> deploy-time **constraint**, unrelated to the runtime `trigger_mode` knob above:
+> `autonomous` and `live` provision nothing and are the default paths. Only `batch`
+> provisions anything — a sweeper Lambda plus an EventBridge schedule that enqueues cases
+> the poller never picked up. It rides the autonomous pipeline's queue rather than standing
+> up a second runtime, so it requires `autonomous` in the same profile (enforced at synth).
+> A *user-identity* outbound additionally requires token refresh, since acting as an absent
+> human needs a credential that outlives the authorizing session; a service identity
+> re-mints per run and needs none. `cognito-m2m-batch` is the shipped profile.
+>
+> Tune the schedule with the optional `batch:` block (default `rate(1 hour)`):
+>
+> ```yaml
+> batch:
+>   schedule: rate(6 hours)
+> ```
 
 #### 4. Configure Cedar policy enforcement
 
@@ -210,7 +232,7 @@ If you set `admin_user_email` in config, check your email for the temporary pass
 ### Sync SAP credentials
 
 ```bash
-./scripts/sync-sap-secret.sh
+python3 launch.py sync-sap
 ```
 
 This reads `sap.base_url` from config.yaml, prompts for username/password, and writes them to Secrets Manager.
@@ -220,7 +242,7 @@ This reads `sap.base_url` from config.yaml, prompts for username/password, and w
 Upload SOPs and SAP API docs to S3 and trigger Bedrock KB re-ingestion:
 
 ```bash
-./scripts/sync-knowledge-base.sh
+python3 launch.py sync-kb
 ```
 
 ### Verify the deployment
@@ -260,19 +282,19 @@ Re-run `local-dev.sh config` after any infrastructure redeployment.
 **SOPs or API docs:**
 
 ```bash
-./scripts/sync-knowledge-base.sh
+python3 launch.py sync-kb
 ```
 
 **SAP credential rotation:**
 
 ```bash
-./scripts/sync-sap-secret.sh
+python3 launch.py sync-sap
 ```
 
 **Autonomy controls (no redeploy):**
 
 ```bash
-./scripts/ops/autonomy.sh set trigger-mode auto
+python3 launch.py autonomy set auto
 ```
 
 ## VPC Deployment

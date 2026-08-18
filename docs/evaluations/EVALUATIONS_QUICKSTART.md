@@ -80,10 +80,19 @@ wired **finance_ap** domain (supplier-invoice three-way-match exceptions):
 ```
 
 The runner consumes `payload` (it invokes the agent and scores the session with the five Builtin
-evaluators); the `expected` block documents the intended behavior for reviewers; the `seed` block
-is used only by `--seed` to create the SAP data (`sap_params` matches the `/test-data/ap-cases`
-request body). The `payload` key fields follow the case schema: `document_number` = supplier
-invoice number, `item_id` = fiscal year (both rewritten to the real SAP keys when seeding).
+evaluators); the `seed` block is used only by `--seed` to create the SAP data (`sap_params` matches
+the `/test-data/ap-cases` request body).
+
+**`expected` is asserted, not just documentation.** `check_expectations` reads the persisted case
+record and fails the case if a `required_tool_calls` entry never appears in the trace, or if the
+final status is outside the set `expected.outcome` maps to (`OUTCOME_TO_STATUS` — an unrecognized
+outcome string is itself a failure, so a typo cannot pass silently). A case with no `expected`
+block fails with "the case asserts nothing." A case passes only when **both** the deterministic
+assertions and the judge threshold pass: the judges score how well the agent explained itself,
+the assertions decide whether it did the right thing.
+
+The `payload` key fields follow the case schema: `document_number` = supplier invoice number,
+`item_id` = fiscal year (both rewritten to the real SAP keys when seeding).
 
 > SAP OData reads/writes go through the external AWS for SAP MCP server, surfaced as MCP tools
 > (`odata_read`, `odata_count`, `odata_create`, `odata_update`, …). Case state, SOP search, and

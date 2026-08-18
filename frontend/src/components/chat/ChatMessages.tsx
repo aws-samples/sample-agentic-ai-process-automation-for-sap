@@ -35,7 +35,7 @@ export function ChatMessages({
       ) : (
         messages.map((message, index) => (
           <ChatMessage
-            key={index}
+            key={message.id ?? index}
             message={message}
             sessionId={sessionId}
             onFeedbackSubmit={async (feedbackType, comment) => {

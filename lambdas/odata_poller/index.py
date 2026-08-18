@@ -47,15 +47,15 @@ def _get_ssm(name: str) -> str:
 # ---------------------------------------------------------------------------
 
 
-def _case_exists(table, doc_number: str, item_id: str) -> bool:
+def _case_exists(table, case_id: str) -> bool:
     """Return True if case exists and is past 'detected' status."""
     try:
-        resp = table.get_item(Key={"document_number": doc_number, "item_id": item_id})
+        resp = table.get_item(Key={"case_id": case_id})
         if "Item" in resp:
             return resp["Item"].get("status", "detected") != "detected"
         return False
     except Exception as e:
-        print(f"Error checking case {doc_number}-{item_id}: {e}")
+        print(f"Error checking case {case_id}: {e}")
         return False
 
 
@@ -64,7 +64,7 @@ def _put_case(table, case_item: dict) -> bool:
     try:
         table.put_item(
             Item=case_item,
-            ConditionExpression="attribute_not_exists(document_number)",
+            ConditionExpression="attribute_not_exists(case_id)",
         )
         return True
     except dynamodb.meta.client.exceptions.ClientError as e:

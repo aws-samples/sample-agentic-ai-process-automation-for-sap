@@ -79,6 +79,43 @@ class TestTicketManagementWritePath:
 
 
 @pytest.fixture
+def case_mgmt(monkeypatch):
+    """Import the gateway case-management handler with boto3 mocked."""
+    monkeypatch.setenv("STACK_NAME_BASE", "test-stack")
+    sys.path.insert(
+        0, str(_ROOT / "agentcore" / "gateway" / "tools" / "case_management")
+    )
+    with patch("boto3.resource"), patch("boto3.client"):
+        import case_management_lambda as cm
+
+        importlib.reload(cm)
+    cm._table = MagicMock()
+    return cm
+
+
+class TestCaseManagementStatusGuard:
+    """`status` is model-authored, so an out-of-enum value must be rejected, not
+    warned about — the UI renders an unknown status as "Detected"."""
+
+    def test_uses_real_enum_not_fallback(self, case_mgmt):
+        assert case_mgmt.CaseStatus is not None
+
+    def test_out_of_enum_status_is_rejected_before_the_write(self, case_mgmt):
+        result = case_mgmt._update_case(
+            {"case_id": "5100001692-2026", "updates": '{"status": "escalated"}'}
+        )
+        assert "escalated" in result["error"]
+        case_mgmt._table.update_item.assert_not_called()
+
+    def test_enum_status_writes(self, case_mgmt):
+        case_mgmt._table.update_item.return_value = {"Attributes": {}}
+        case_mgmt._update_case(
+            {"case_id": "5100001692-2026", "updates": '{"status": "error"}'}
+        )
+        case_mgmt._table.update_item.assert_called_once()
+
+
+@pytest.fixture
 def poller_engine():
     sys.path.insert(0, str(_ROOT / "lambdas" / "odata_poller"))
     import polling_engine as pe
@@ -98,6 +135,7 @@ class TestPollerValidation:
         from decimal import Decimal
 
         case_item = {
+            "case_id": "D1-1",
             "document_number": "D1",
             "item_id": "1",
             "domain": "finance_ap",
@@ -113,6 +151,26 @@ class TestPollerValidation:
                 poller_engine.WorkItem, case_item, context="odata_poller"
             )
         assert not any("validation failed" in r.message for r in caplog.records)
+
+    def test_expanded_nav_props_are_also_selected(self):
+        # $select and $expand are ANDed by SAP: a nav property named in $expand but
+        # absent from $select is omitted from the response entirely — no error, just
+        # no children. Every finance_ap case landed with a blank purchase_order for
+        # exactly this reason, so the field_map's child.* paths resolved to nothing.
+        import json
+
+        for path in sorted(
+            (_ROOT / "lambdas" / "odata_poller" / "domains").glob("*.json")
+        ):
+            config = json.loads(path.read_text(encoding="utf-8"))
+            expand, select = config.get("expand"), config.get("select")
+            if not expand or not select:
+                continue  # no $select means SAP returns everything, children included
+            selected = {f.strip() for f in select.split(",")}
+            missing = [
+                n.strip() for n in expand.split(",") if n.strip() not in selected
+            ]
+            assert not missing, f"{path.name}: expanded but not selected: {missing}"
 
     def test_drifted_case_item_logs(self, poller_engine, caplog):
         case_item = {
@@ -153,6 +211,7 @@ class TestCasesApiReadPath:
         cases_api.table = MagicMock()
         cases_api.table.get_item.return_value = {
             "Item": {
+                "case_id": "5100001692-2026",
                 "document_number": "5100001692",
                 "item_id": "2026",
                 "domain": "finance_ap",
@@ -164,8 +223,8 @@ class TestCasesApiReadPath:
         }
         event = {
             "httpMethod": "GET",
-            "path": "/cases/5100001692/2026",
-            "pathParameters": {"doc": "5100001692", "item": "2026"},
+            "path": "/cases/5100001692-2026",
+            "pathParameters": {"case_id": "5100001692-2026"},
             "headers": {},
         }
         with caplog.at_level(logging.WARNING):

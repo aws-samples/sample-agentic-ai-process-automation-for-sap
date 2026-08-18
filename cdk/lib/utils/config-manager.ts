@@ -29,8 +29,6 @@ export interface VpcConfig {
   security_group_ids?: string[]
 }
 
-export type AuthProvider = "cognito" | "okta" | "custom-oidc"
-
 /**
  * "Same sub" OBO federation: lets SAP Cloud Identity Services (IAS) consume the
  * product's user-facing Cognito pool as an OIDC corporate IdP, so a user-initiated
@@ -60,22 +58,11 @@ export interface SapIdentityConfig {
   federation?: SapFederationConfig
 }
 
-export interface AuthConfig {
-  issuer_url?: string
-  client_id?: string
-  scopes?: string
-  /** JWT claim for username extraction. Default: preferred_username.
-   *  Cognito: cognito:username, Okta: preferred_username, Azure AD: upn */
-  username_claim?: string
-  /** Expected audience (aud) claim for JWT validation. */
-  audience?: string
-}
-
 export interface NotificationConfig {
-  channel?: "ses" | "servicenow" | "jira" | "slack"
+  channel?: "ses" | "servicenow" | "jira"
   /** SES sender email (ses channel) */
   ses_sender_email?: string
-  /** Secrets Manager ARN for channel credentials (servicenow/jira/slack) */
+  /** Secrets Manager ARN for channel credentials (servicenow/jira) */
   secret_arn?: string
 }
 
@@ -87,6 +74,11 @@ export interface AgentQueueConfig {
 export interface AutonomyConfig {
   /** auto = poller enqueues immediately, manual = human triggers. Default manual. */
   trigger_mode?: "auto" | "manual"
+}
+
+export interface BatchConfig {
+  /** EventBridge schedule for the `mode: batch` sweeper. Default rate(1 hour). */
+  schedule?: string
 }
 
 /**
@@ -122,18 +114,6 @@ export interface SapMcpConfig {
    *   avoids schema normalization when tool schemas don't normalize cleanly.
    */
   listing_mode?: "DYNAMIC" | "DEFAULT"
-
-  /** Comma-separated SAP service prefixes to allow (e.g., "API_,ZUI_"). */
-  allowed_service_prefixes?: string
-
-  /** Whether the MCP server should fetch the SAP IWFND/CATALOGSERVICE catalog. */
-  use_sap_catalog?: boolean
-
-  /** S3 bucket name for a custom service catalog (must start with awsforsap-mcp-server-). */
-  custom_catalog_bucket?: string
-
-  /** Log level for the MCP container. */
-  log_level?: "DEBUG" | "INFO" | "WARN" | "ERROR"
 
   // Note: the target variant (Service / User) is derived from auth_profile's
   // outbound axis at synth.
@@ -198,6 +178,35 @@ export interface SecurityConfig {
   waf_enabled?: boolean
   /** Create a Bedrock Guardrail and wire it into the agent's model. Threats T2/T15. */
   guardrail_enabled?: boolean
+  /**
+   * Create a CloudTrail trail feeding the autonomy-change alarm (M7).
+   *
+   * CloudTrail allows only 5 trails per Region and that is a hard limit, not a
+   * raisable quota. Creating one unconditionally caps how many copies of this
+   * sample can coexist in a Region and fails the deploy outright once the
+   * account is at the limit, so it is opt-in.
+   */
+  audit_trail_enabled?: boolean
+}
+
+/**
+ * Precedent retrieval + vendor risk traversal, backed by one Aurora Serverless
+ * v2 cluster. Default OFF: with this block absent the stack provisions no
+ * cluster, no VPC, and no tool, so the golden path's cost is unchanged.
+ */
+export interface AgentKnowledgeConfig {
+  /** Provision the cluster, schema, and Gateway tool. Default false. */
+  enabled?: boolean
+  /**
+   * Aurora Serverless v2 minimum ACUs. 0 lets the cluster auto-pause to ~$0
+   * idle at the cost of a ~15s resume on the first call after a pause. 0.5
+   * (~$43/mo in us-east-1) removes the stall. Default 0.
+   */
+  min_acu?: number
+  /** Idle seconds before auto-pause. RDS accepts 300–86400. Default 3600. */
+  seconds_until_auto_pause?: number
+  /** Vendor node/edge tables and the check_vendor_risk tool. Default true. */
+  vendor_risk?: boolean
 }
 
 export interface AppConfig {
@@ -214,6 +223,7 @@ export interface AppConfig {
   notification?: NotificationConfig
   agent_queue?: AgentQueueConfig
   autonomy?: AutonomyConfig
+  batch?: BatchConfig
   cedar_enforcement_mode?: "LOG_ONLY" | "ENFORCE"
   security?: SecurityConfig
   demo?: {
@@ -226,11 +236,33 @@ export interface AppConfig {
   }
   contacts?: Record<string, string>
   alarm_email?: string
+  /**
+   * Knowledge Base (vector) tuning. Governs how SOP documents are chunked when
+   * ingested into the SOPs Bedrock KB that backs the `search_sap_sops` tool.
+   */
+  knowledge_base?: {
+    /**
+     * Chunking strategy for the SOPs vector KB:
+     *  - "BEDROCK_DEFAULT": omit explicit chunking configuration. This preserves
+     *    legacy data sources created before chunking became config-driven and
+     *    lets Bedrock select its default for newly created data sources.
+     *  - "NONE" (default): one vector per SOP file → whole-SOP retrieval, never
+     *    fragments mixed across SOPs. Requires each SOP to fit the embedding
+     *    input limit (Titan v2 ≈ 8k tokens / 50k chars).
+     *  - "FIXED_SIZE": ~maxTokens chunks with overlap. For long SOPs that exceed
+     *    the embedding limit. Combine with SOP-scoped metadata for integrity.
+     *  - "SEMANTIC": structure-aware chunks. Best for long, well-sectioned SOPs.
+     */
+    sops_chunking_strategy?: "BEDROCK_DEFAULT" | "NONE" | "FIXED_SIZE" | "SEMANTIC"
+    /** FIXED_SIZE/SEMANTIC: target max tokens per chunk (default 300). */
+    sops_chunk_max_tokens?: number
+    /** FIXED_SIZE: overlap percentage between adjacent chunks, 1–99 (default 20). */
+    sops_chunk_overlap_percentage?: number
+  }
+  agent_knowledge?: AgentKnowledgeConfig
   sap?: {
     base_url?: string
     identity?: SapIdentityConfig
-    auth_provider?: AuthProvider
-    auth?: AuthConfig
     ses_sender_email?: string | null
     poller_schedule?: string
     embedding_model?: string
@@ -290,6 +322,14 @@ export class ConfigManager {
         throw new Error(`Invalid network_mode '${networkMode}'. Must be 'PUBLIC' or 'VPC'.`)
       }
 
+      const sopsChunkingStrategy = parsedConfig.knowledge_base?.sops_chunking_strategy || "NONE"
+      if (!["BEDROCK_DEFAULT", "NONE", "FIXED_SIZE", "SEMANTIC"].includes(sopsChunkingStrategy)) {
+        throw new Error(
+          `Invalid knowledge_base.sops_chunking_strategy '${sopsChunkingStrategy}'. ` +
+            `Must be 'BEDROCK_DEFAULT', 'NONE', 'FIXED_SIZE', or 'SEMANTIC'.`
+        )
+      }
+
       const vpcConfig = parsedConfig.backend?.vpc
       if (networkMode === "VPC") {
         if (!vpcConfig) {
@@ -321,14 +361,20 @@ export class ConfigManager {
           max_concurrency: parsedConfig.agent_queue.max_concurrency || 5,
         } : undefined,
         contacts: parsedConfig.contacts,
+        knowledge_base: {
+          sops_chunking_strategy: sopsChunkingStrategy as "BEDROCK_DEFAULT" | "NONE" | "FIXED_SIZE" | "SEMANTIC",
+          sops_chunk_max_tokens: parsedConfig.knowledge_base?.sops_chunk_max_tokens ?? 300,
+          sops_chunk_overlap_percentage: parsedConfig.knowledge_base?.sops_chunk_overlap_percentage ?? 20,
+        },
         autonomy: {
           trigger_mode: parsedConfig.autonomy?.trigger_mode || "manual",
         },
+        batch: parsedConfig.batch ? {
+          schedule: parsedConfig.batch.schedule,
+        } : undefined,
         sap: parsedConfig.sap ? {
           base_url: parsedConfig.sap.base_url,
           identity: this._normalizeSapIdentity(parsedConfig.sap.identity),
-          auth_provider: parsedConfig.sap.auth_provider || "cognito",
-          auth: parsedConfig.sap.auth,
           ses_sender_email: parsedConfig.sap.ses_sender_email || null,
           poller_schedule: parsedConfig.sap.poller_schedule || "rate(5 minutes)",
           embedding_model: parsedConfig.sap.embedding_model || "amazon.titan-embed-text-v2:0",
@@ -337,8 +383,10 @@ export class ConfigManager {
         security: {
           waf_enabled: parsedConfig.security?.waf_enabled === true,
           guardrail_enabled: parsedConfig.security?.guardrail_enabled === true,
+          audit_trail_enabled: parsedConfig.security?.audit_trail_enabled === true,
         },
         demo: this._normalizeDemo(parsedConfig.demo),
+        agent_knowledge: this._normalizeAgentKnowledge(parsedConfig.agent_knowledge),
       }
     } catch (error) {
       throw new Error(`Failed to parse configuration file ${configPath}: ${error}`)
@@ -385,6 +433,32 @@ export class ConfigManager {
       enabled: ticketing && testData,
       ticketing: { enabled: ticketing },
       test_data: { enabled: testData },
+    }
+  }
+
+  /**
+   * Collapse the agent_knowledge block to undefined unless explicitly enabled,
+   * so `if (config.agent_knowledge?.enabled)` is the only gate any caller needs.
+   */
+  private _normalizeAgentKnowledge(
+    raw: AgentKnowledgeConfig | undefined,
+  ): AgentKnowledgeConfig | undefined {
+    if (raw?.enabled !== true) return undefined
+
+    const autoPause = raw.seconds_until_auto_pause ?? 3600
+    // RDS rejects anything outside this window; failing at synth beats failing
+    // 20 minutes into a cluster deploy.
+    if (autoPause < 300 || autoPause > 86400) {
+      throw new Error(
+        `agent_knowledge.seconds_until_auto_pause must be between 300 and 86400 (got ${autoPause})`,
+      )
+    }
+
+    return {
+      enabled: true,
+      min_acu: raw.min_acu ?? 0,
+      seconds_until_auto_pause: autoPause,
+      vendor_risk: raw.vendor_risk ?? true,
     }
   }
 
@@ -450,21 +524,12 @@ export class ConfigManager {
       throw new Error(`Invalid sap_mcp.listing_mode '${listingMode}'. Must be 'DYNAMIC' or 'DEFAULT'.`)
     }
 
-    const logLevel = raw.log_level || "INFO"
-    if (!["DEBUG", "INFO", "WARN", "ERROR"].includes(logLevel)) {
-      throw new Error(`Invalid sap_mcp.log_level '${logLevel}'. Must be one of DEBUG|INFO|WARN|ERROR.`)
-    }
-
     // The active target variant (Service / User) is derived from auth_profile's
     // outbound axis at synth (see sap-mcp-stack.ts resolveOutboundProfile).
     return {
       enabled: true,
       external_stack: raw.external_stack,
       listing_mode: listingMode,
-      allowed_service_prefixes: raw.allowed_service_prefixes || "API_",
-      use_sap_catalog: raw.use_sap_catalog !== false, // default true
-      custom_catalog_bucket: raw.custom_catalog_bucket,
-      log_level: logLevel,
     }
   }
 }

@@ -8,11 +8,16 @@
   --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+  --font-display: var(--font-display-face);
   --color-brand-dark: hsl(197, 37%, 24%);
   --color-brand-teal: hsl(173, 58%, 39%);
   --color-brand-lime: hsl(43, 74%, 66%);
   --color-brand-yellow: hsl(27, 87%, 67%);
   --color-brand-orange: hsl(12, 76%, 61%);
+  --color-agent: var(--agent);
+  --color-agent-foreground: var(--agent-foreground);
+  --color-agent-strong: var(--agent-strong);
+  --color-link: var(--link);
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -48,82 +53,232 @@
   --radius-xl: calc(var(--radius) + 4px);
 }
 
+/**
+ * The whole type scale, including two steps below Tailwind's `xs` for the trace
+ * and timeline rows that need them. Deliberately NOT in the `@theme inline` block
+ * above: `inline` bakes the value into the utility, and these have to stay a
+ * `var()` so `.compact` can move them. Every step is re-declared here rather than
+ * inherited from Tailwind's defaults because comfortable comes *down* to meet
+ * compact — the two modes converge through the type scale, not through
+ * `--spacing`, which admits only 4px and 3px if `min-h-7`/`w-11` are to stay on
+ * integer pixels.
+ *
+ * Each `--line-height` is the target line box divided by the size, so the pair is
+ * the row height: 10.75px × 1.395 = 15px, not "11px and roughly a bit more".
+ */
+@theme {
+  --text-3xs: 0.625rem;
+  --text-3xs--line-height: 1.35;
+  --text-2xs: 0.671875rem;
+  --text-2xs--line-height: 1.395;
+  --text-xs: 0.71875rem;
+  --text-xs--line-height: 1.348;
+  --text-sm: 0.84375rem;
+  --text-sm--line-height: 1.37;
+  --text-base: 0.96875rem;
+  --text-base--line-height: 1.419;
+  --text-lg: 1.0625rem;
+  --text-lg--line-height: 1.471;
+  --text-xl: 1.1875rem;
+  --text-xl--line-height: 1.421;
+  --text-2xl: 1.375rem;
+  --text-2xl--line-height: 1.364;
+  --text-3xl: 1.75rem;
+  --text-3xl--line-height: 1.214;
+}
+
 :root {
-  --radius: 0.625rem;
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
+  /* Console radius, not consumer. 6px reads as a tool; the old 0.625rem/10px
+     read as a phone app. Every radius-* step derives from this one knob. */
+  --radius: 0.375rem;
+
+  /* Chrome geometry: one source for panel widths and the top-band height, so a
+     component can't re-decide one locally. Every one of these moves with density —
+     the widths are re-declared in `.compact` and `--band-h` derives from `--spacing`.
+     Chrome that ignored the density toggle would be the same bug in a new place.
+
+     The rail has one width because it has one state: icons, labelled by tooltip. 48px
+     holds the 32px logo tile plus the nav list's `px-2`, which also lands the active
+     marker's `-left-2` exactly on the rail's edge in both densities. */
+  --rail-w: 3rem;
+  --dock-w: 24rem;
+  --gutter-w: 2.75rem;
+  --band-h: calc(var(--spacing) * 12);
+
+  /* Ground: a cool slate cast, not pure achromatic — the neutrals carry a faint
+     210° hue so the app reads as an enterprise console rather than a blank sheet.
+     Surfaces climb in lightness (background → card → popover) so panels lift off
+     the ground without a border. */
+  --background: hsl(210 20% 98%);
+  --foreground: hsl(215 25% 15%);
   --brand-dark: 197 37% 24%;
   --brand-teal: 173 58% 39%;
   --brand-lime: 43 74% 66%;
   --brand-yellow: 27 87% 67%;
   --brand-orange: 12 76% 61%;
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
+  --card: hsl(0 0% 100%);
+  --card-foreground: hsl(215 25% 15%);
+  --popover: hsl(0 0% 100%);
+  --popover-foreground: hsl(215 25% 15%);
+  --primary: hsl(215 25% 20%);
+  --primary-foreground: hsl(210 20% 98%);
+  --secondary: hsl(210 16% 95%);
+  --secondary-foreground: hsl(215 25% 20%);
+  --muted: hsl(210 16% 95%);
+  --muted-foreground: hsl(215 12% 42%);
+  --accent: hsl(210 16% 93%);
+  --accent-foreground: hsl(215 25% 20%);
   --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
+  --border: hsl(214 15% 91%);
+  --input: hsl(214 15% 89%);
+  --ring: hsl(215 16% 65%);
   --chart-1: oklch(0.646 0.222 41.116);
   --chart-2: oklch(0.6 0.118 184.704);
   --chart-3: oklch(0.398 0.07 227.392);
   --chart-4: oklch(0.828 0.189 84.429);
   --chart-5: oklch(0.769 0.188 70.08);
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
+  --sidebar: hsl(210 22% 96%);
+  --sidebar-foreground: hsl(215 25% 15%);
+  --sidebar-primary: hsl(215 25% 20%);
+  --sidebar-primary-foreground: hsl(210 20% 98%);
+  --sidebar-accent: hsl(210 16% 93%);
+  --sidebar-accent-foreground: hsl(215 25% 20%);
+  --sidebar-border: hsl(214 15% 91%);
+  --sidebar-ring: hsl(215 16% 65%);
 
-  /* Font variables for Geist fonts */
+  /* Agent activity, reserved. This one hue means "the agent is working" —
+     thinking, streaming, live — and nothing else. Violet because no status tone
+     owns it, so agent motion never reads as info/success/danger. `agent` is the
+     accent; `agent-foreground` is text/icons that sit on it. */
+  --agent: hsl(258 90% 66%);
+  --agent-foreground: hsl(0 0% 100%);
+  /* Same hue darkened to ~5.3:1 on the sidebar, for when the violet carries small
+     text rather than an icon or a fill. The accent itself is 3.9:1 — a graphical
+     object clears 3:1, but text owes 4.5:1. Do not raise past 58%. */
+  --agent-strong: hsl(258 80% 58%);
+
+  /* Link color. Brand-teal hue darkened to ~5.1:1 on the light background so
+     body-text links clear the WCAG AA 4.5:1 floor. Do not raise past 32%. */
+  --link: hsl(173 58% 29%);
+
+  /* Motion. One easing curve and three durations — see frontend/README.md.
+     Nothing in the app should animate longer than --duration-slow. */
+  --ease-standard: cubic-bezier(0.22, 1, 0.36, 1);
+  --duration-fast: 120ms;
+  --duration-base: 200ms;
+  --duration-slow: 250ms;
+
+  /* Type: three faces, three jobs. Geist Sans carries body and UI; Geist Mono
+     carries anything the operator must read character-by-character against SAP
+     (case ids, PO numbers, tool names); Space Grotesk is the display face for
+     headings and headline numerics. Its wider apertures and squarer terminals
+     separate a heading from the body text under it at the same weight, which a
+     single-family stack can only do with size. Both sans faces ship `tnum`, so
+     `tabular-nums` on a money column actually gets monospaced digits rather
+     than silently doing nothing. */
   --font-geist-sans: "Geist", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   --font-geist-mono: "Geist Mono", "Courier New", Consolas, Monaco, monospace;
+  --font-display-face: "Space Grotesk", var(--font-geist-sans);
 }
 
 .dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
+  /* Same cool slate, inverted: a 215° near-black ground with panels lifted on
+     lightness. Matches the light theme's temperature so charts and status tones
+     read the same in both. */
+  --background: hsl(215 28% 9%);
+  --foreground: hsl(210 20% 96%);
+  --card: hsl(215 24% 13%);
+  --card-foreground: hsl(210 20% 96%);
+  --popover: hsl(215 24% 13%);
+  --popover-foreground: hsl(210 20% 96%);
+  --primary: hsl(210 20% 92%);
+  --primary-foreground: hsl(215 28% 12%);
+  --secondary: hsl(215 20% 20%);
+  --secondary-foreground: hsl(210 20% 96%);
+  --muted: hsl(215 20% 20%);
+  --muted-foreground: hsl(215 14% 65%);
+  --accent: hsl(215 20% 22%);
+  --accent-foreground: hsl(210 20% 96%);
   --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
+  --border: hsl(210 20% 100% / 10%);
+  --input: hsl(210 20% 100% / 15%);
+  --ring: hsl(215 14% 52%);
   --chart-1: oklch(0.488 0.243 264.376);
   --chart-2: oklch(0.696 0.17 162.48);
   --chart-3: oklch(0.769 0.188 70.08);
   --chart-4: oklch(0.627 0.265 303.9);
   --chart-5: oklch(0.645 0.246 16.439);
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.556 0 0);
+  --sidebar: hsl(215 26% 11%);
+  --sidebar-foreground: hsl(210 20% 96%);
+  --sidebar-primary: hsl(210 20% 92%);
+  --sidebar-primary-foreground: hsl(215 28% 12%);
+  --sidebar-accent: hsl(215 20% 22%);
+  --sidebar-accent-foreground: hsl(210 20% 96%);
+  --sidebar-border: hsl(210 20% 100% / 10%);
+  --sidebar-ring: hsl(215 14% 52%);
+
+  /* Lifted for the dark ground; violet stays saturated so it reads as motion. */
+  --agent: hsl(258 90% 74%);
+  --agent-foreground: hsl(258 40% 12%);
+  /* The lifted accent is already 5.9:1 on the dark sidebar, so text reuses it. */
+  --agent-strong: hsl(258 90% 74%);
+
+  /* Same hue lightened for the dark ground (~9.9:1). */
+  --link: hsl(173 58% 62%);
+}
+
+/**
+ * Compact density. Target users live in SAP GUI and read whitespace as wasted
+ * screen, so this re-declares Tailwind's own scales rather than adding a second
+ * set of utilities: every `p-*`, `gap-*`, and `h-*` resolves through `--spacing`,
+ * so one class on <html> restyles the app and no component has to know density
+ * exists. The type steps come with it — margins alone are not density.
+ *
+ * Unlayered on purpose. Tailwind's defaults live in `@layer theme`, and an
+ * unlayered rule wins over any layered one regardless of specificity.
+ *
+ * Not touched: `--radius` (identity, not density) and arbitrary-value classes,
+ * which Tailwind resolves without the theme. That is why the 45 `text-[10px]` /
+ * `text-[11px]` sites moved onto `text-3xs` / `text-2xs` — an arbitrary size gets
+ * no line-height either, so those rows were the ones density could not reach.
+ */
+.compact {
+  --spacing: 0.1875rem;
+
+  /* The chrome widths were `w-60`/`w-96`/`w-11` before they became tokens, and every
+     numeric width utility resolves through `--spacing` — so they already narrowed
+     here. Fixed rem would have made compact's rail and dock *wider* than
+     comfortable's, taking the space off the case list. The rail's floor is the 16px
+     icon plus the nav list's `px-2` (6px a side here), so 40px is the last step that
+     still centres the icon and keeps the active marker on the rail's edge. */
+  --rail-w: 2.5rem;
+  --dock-w: 18rem;
+  --gutter-w: 2.0625rem;
+
+  /* Both halves of each step. Leading is where the rows actually are — a list of
+     text-xs rows loses more height to line-height than to padding. */
+  --text-xs: 0.703125rem;
+  --text-xs--line-height: 1.298;
+  --text-sm: 0.8125rem;
+  --text-sm--line-height: 1.269;
+  --text-base: 0.9375rem;
+  --text-base--line-height: 1.333;
+  --text-lg: 1.03125rem;
+  --text-lg--line-height: 1.358;
+  --text-xl: 1.125rem;
+  --text-xl--line-height: 1.333;
+  --text-2xl: 1.3125rem;
+  --text-2xl--line-height: 1.286;
+  --text-3xl: 1.5625rem;
+  --text-3xl--line-height: 1.16;
+
+  /* 10px is the floor — `3xs` is already there, so it only tightens leading.
+     Below that the trace rows stop being readable, and density is not an excuse.
+     `2xs` rises to 10.5px inside the same 14px box: more glyph, same rhythm. */
+  --text-2xs: 0.65625rem;
+  --text-2xs--line-height: 1.333;
+  --text-3xs: 0.625rem;
+  --text-3xs--line-height: 1.33;
 }
 
 @layer base {
@@ -133,24 +288,18 @@
   body {
     @apply bg-background text-foreground;
   }
-  a {
-    @apply text-brand-yellow hover:text-brand-yellow/80 underline;
-  }
-}
+  /* No blanket `a` rule. Most anchors here are react-router <Link>s wrapping
+     buttons or rail items, and a global color/underline leaked onto all of them.
+     Prose links are styled where they are rendered — see MarkdownRenderer. */
 
-@keyframes fade-in-up {
-  0% {
-    opacity: 0;
-    transform: translateY(30px);
+  /* Hit-target floor. Compact scales `--spacing`, which would take the case-row
+     checkbox (h-3.5) to 10.5px — too small to hit reliably. One rule here rather
+     than a pinned size at each call site, since they all route through `input`. */
+  .compact input[type="checkbox"],
+  .compact input[type="radio"] {
+    min-width: 14px;
+    min-height: 14px;
   }
-  100% {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-.animate-fade-in-up {
-  animation: fade-in-up 2s ease-out;
 }
 
 @keyframes rise-in {
@@ -167,15 +316,12 @@
 /* Subtle entrance for empty states / landing. */
 .animate-rise-in {
   opacity: 0;
-  animation: rise-in 0.5s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  animation: rise-in var(--duration-base) var(--ease-standard) forwards;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .animate-rise-in,
-  .animate-fade-in-up {
-    animation: none;
-  }
   .animate-rise-in {
+    animation: none;
     opacity: 1;
   }
 }

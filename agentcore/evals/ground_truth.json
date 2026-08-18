@@ -25,7 +25,6 @@
       "required_tool_calls": [
         "get_case_state",
         "odata_read",
-        "search_sap_sops",
         "update_case_state"
       ]
     }
@@ -56,7 +55,6 @@
       "required_tool_calls": [
         "get_case_state",
         "odata_read",
-        "search_sap_sops",
         "send_notification",
         "update_case_state"
       ]
@@ -88,8 +86,37 @@
       "required_tool_calls": [
         "get_case_state",
         "odata_read",
-        "search_sap_sops",
         "send_notification",
+        "update_case_state"
+      ]
+    }
+  },
+  {
+    "test_id": "ap_quantity_variance_at_unit_floor",
+    "description": "Invoice 108 vs GR 100 is 8% (above QTY_VARIANCE_PCT=5) but only 8 units (below QTY_VARIANCE_UNITS=10), so exactly one of the two tolerance limits is breached. The SOP requires BOTH to be breached before escalating, so this is WITHIN tolerance.",
+    "process_type": "quantity_variance",
+    "payload": {
+      "document_number": "5105600105",
+      "item_id": "2026",
+      "process_type": "quantity_variance"
+    },
+    "seed": {
+      "sap_params": {
+        "po_amount": 50000,
+        "invoice_amount": 54000,
+        "po_quantity": 100,
+        "invoice_quantity": 108,
+        "gr_quantity": 100,
+        "payment_block": "R",
+        "skip_gr": false
+      }
+    },
+    "expected": {
+      "outcome": "auto_release",
+      "reason": "8 units does not exceed the 10-unit limit, so only one of the two limits is breached and clause 2.2 puts the variance WITHIN tolerance",
+      "required_tool_calls": [
+        "get_case_state",
+        "odata_read",
         "update_case_state"
       ]
     }
@@ -120,7 +147,6 @@
       "required_tool_calls": [
         "get_case_state",
         "odata_read",
-        "search_sap_sops",
         "send_notification",
         "update_case_state"
       ]

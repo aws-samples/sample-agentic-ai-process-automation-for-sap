@@ -17,7 +17,6 @@ Addresses threat model mitigations M9 (T11, T16).
 
 | Channel | Algorithm | Headers Checked | Replay Protection |
 |---------|-----------|----------------|-------------------|
-| Slack | HMAC-SHA256 (`v0:` prefix) | `X-Slack-Signature`, `X-Slack-Request-Timestamp` | 5-minute window |
 | Jira | HMAC-SHA256 | `X-Hub-Signature` (`sha256=` prefix) | None (Jira standard) |
 | ServiceNow | Shared token | `X-Webhook-Secret` | None |
 | SES | N/A (S3-triggered) | N/A | N/A |
@@ -28,7 +27,6 @@ Addresses threat model mitigations M9 (T11, T16).
 2. Run `make sync-channel-secret` to add the webhook signing secret.
 
 Where to find the secret:
-- **Slack**: App admin → Basic Information → Signing Secret
 - **Jira**: Set when creating the webhook (Settings → System → WebHooks)
 - **ServiceNow**: Shared token you define in the outbound REST message configuration
 

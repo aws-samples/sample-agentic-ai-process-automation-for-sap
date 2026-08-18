@@ -11,7 +11,7 @@ Only requires Python 3.8+, AWS CLI, and git — no other dependencies.
 Flow: zip source → temp S3 bucket → temp IAM role → temp CodeBuild project →
       stream logs → cleanup all temp resources.
 
-Usage: python scripts/deploy-with-codebuild.py
+Usage: python scripts/deploy/deploy-with-codebuild.py
 """
 
 import atexit
@@ -617,7 +617,9 @@ def main() -> int:
 
     auth_profile = os.environ.get("AUTH_PROFILE", "")
     if not auth_profile:
-        m = re.search(r"^auth_profile:\s*(\S+)", config_text, re.MULTILINE)
+        # Canonical config is top-level; optional indentation preserves
+        # compatibility with configs copied while this key was shown under sap:.
+        m = re.search(r"^[ \t]*auth_profile:\s*(\S+)", config_text, re.MULTILINE)
         auth_profile = m.group(1) if m else "cognito-basic"
     log_success(f"Auth profile: {auth_profile}")
 

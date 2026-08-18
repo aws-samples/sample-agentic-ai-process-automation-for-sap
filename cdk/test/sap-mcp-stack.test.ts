@@ -8,6 +8,7 @@ import * as bedrockagentcore from "aws-cdk-lib/aws-bedrockagentcore"
 import * as fs from "fs"
 import * as path from "path"
 import { SapMcpStack } from "../lib/sap-mcp-stack"
+import { mapExternalStackInfo } from "../lib/utils/cfn-outputs-resolver"
 import { AppConfig } from "../lib/utils/config-manager"
 
 // SapMcpStack derives its target variant from the outbound block of this artifact
@@ -41,7 +42,10 @@ function externalConfig(): AppConfig {
   } as AppConfig
 }
 
-function harness(config: AppConfig): SapMcpStack {
+// The external stack's AuthFlow parameter is read live from CloudFormation at real
+// synth; offline it defaults to "M2M". Tests that assert on OBO must state it,
+// since Entra inbound alone does not imply the exchange flow outbound.
+function harness(config: AppConfig, authFlow?: string): SapMcpStack {
   const app = new cdk.App()
   const host = new cdk.Stack(app, "Host", { env: { account: "111122223333", region: "us-east-1" } })
   const gateway = new bedrockagentcore.CfnGateway(host, "GW", {
@@ -50,10 +54,14 @@ function harness(config: AppConfig): SapMcpStack {
     authorizerConfiguration: { customJwtAuthorizer: { discoveryUrl: "https://idp/.well-known/openid-configuration" } },
   })
   const gatewayRole = new iam.Role(host, "GWRole", { assumedBy: new iam.ServicePrincipal("bedrock-agentcore.amazonaws.com") })
+  const ext = config.sap_mcp?.external_stack
   return new SapMcpStack(app, "test-proj-sap-mcp", {
     config,
     gateway,
     gatewayRole,
+    externalStack: authFlow
+      ? { ...mapExternalStackInfo({}, { ...ext, stack_name: undefined } as any), authFlow }
+      : undefined,
     env: { account: "111122223333", region: "us-east-1" },
   })
 }
@@ -329,7 +337,9 @@ describe("SapMcpStack OBO (direct-to-MCP) topology", () => {
       obo_direct_mcp: true,
       mcp_invocation_url: "https://example-mcp.invalid/mcp",
     })
-    const t = Template.fromStack(harness(entraExternalConfig()))
+    const t = Template.fromStack(
+      harness(entraExternalConfig(), "ON_BEHALF_OF_TOKEN_EXCHANGE"),
+    )
     // OBO bypasses our Gateway entirely — neither Service nor User target.
     t.resourceCountIs("AWS::BedrockAgentCore::GatewayTarget", 0)
     t.resourceCountIs("AWS::SSM::Parameter", 2)
@@ -362,8 +372,31 @@ describe("SapMcpStack OBO (direct-to-MCP) topology", () => {
 
   test("mismatch: M2M artifact against an Entra/OBO external stack throws the guard message", () => {
     writeOutbound({ flow: "M2M", service_enabled: true, user_enabled: false })
-    expect(() => harness(entraExternalConfig())).toThrow(
-      /A machine token will be rejected by that inbound authorizer/,
+    expect(() =>
+      harness(entraExternalConfig(), "ON_BEHALF_OF_TOKEN_EXCHANGE"),
+    ).toThrow(/A machine token will be rejected by that inbound authorizer/)
+  })
+
+  // Entra inbound with a non-exchange outbound flow is a real deployed shape (the
+  // auth-matrix verification server): the runtime still validates the user's Entra
+  // JWT, but reaches SAP as a Basic technical user. Only AuthFlow decides OBO.
+  test("Entra inbound + BASIC outbound synthesizes a Service target, not the OBO path", () => {
+    writeOutbound({ flow: "BASIC", service_enabled: true, user_enabled: false })
+    const t = Template.fromStack(harness(entraExternalConfig(), "BASIC"))
+    t.resourceCountIs("AWS::BedrockAgentCore::GatewayTarget", 1)
+    t.resourceCountIs("AWS::SSM::Parameter", 0)
+  })
+
+  test("OBO artifact against an Entra stack whose flow is BASIC still throws", () => {
+    writeOutbound({
+      flow: "ON_BEHALF_OF_TOKEN_EXCHANGE",
+      service_enabled: false,
+      user_enabled: true,
+      obo_direct_mcp: true,
+      mcp_invocation_url: "https://example-mcp.invalid/mcp",
+    })
+    expect(() => harness(entraExternalConfig(), "BASIC")).toThrow(
+      /OBO requires the external stack to accept the user's Entra JWT inbound/,
     )
   })
 

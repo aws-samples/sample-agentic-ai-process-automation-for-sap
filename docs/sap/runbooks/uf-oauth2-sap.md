@@ -5,9 +5,10 @@ SPDX-License-Identifier: Apache-2.0
 
 # USER_FEDERATION with SAP as its own OAuth Authorization Server — Operator Runbook
 
-> **PREVIEW — not yet deployable.** The USER_FEDERATION outbound is a preview topology:
-> it is modeled and validated, but its IaC module is not built yet. Reference design for the
-> roadmap, not a ready-to-run procedure.
+> **PREVIEW — not yet deployable.** The USER_FEDERATION outbound is `status: stub,
+> blocked_by: upstream` in `auth-profiles.yaml` — the repository wiring exists, but end-to-end
+> verification is blocked by an unresolved defect in AgentCore Identity's 3LO token vault.
+> Reference design for the roadmap, not a ready-to-run procedure.
 
 > **STATUS — READ THIS FIRST.** The headline claim for this flow ("SAP mints its own per-user token
 > via a 3-legged USER_FEDERATION login with **no** external IdP and **no** SAML — the lowest-risk

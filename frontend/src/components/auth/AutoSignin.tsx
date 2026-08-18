@@ -1,15 +1,32 @@
 // Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
-"use client"
-
-import { ReactNode, useEffect, useState, PropsWithChildren } from "react"
+import { ReactNode, useEffect, useRef, useState, PropsWithChildren } from "react"
+import { useQueryClient } from "@tanstack/react-query"
 import { useAuth } from "react-oidc-context"
 import { Sparkles, ArrowRight } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { clearOperatorContext } from "@/lib/signOut"
 
 function AutoSigninContent({ children }: PropsWithChildren) {
   const auth = useAuth()
+  const queryClient = useQueryClient()
+
+  // Drop the previous operator's cases, transcript, and focused-case URL whenever the
+  // session ends. Hung on the authenticated→unauthenticated edge rather than on the
+  // sign-out button, so an expired or revoked session wipes the same residue — and so
+  // a failed sign-out redirect cannot leave it on screen for whoever signs in next.
+  const wasAuthenticated = useRef(false)
+  useEffect(() => {
+    if (auth.isLoading) return
+    if (auth.isAuthenticated) {
+      wasAuthenticated.current = true
+      return
+    }
+    if (!wasAuthenticated.current) return
+    wasAuthenticated.current = false
+    clearOperatorContext(queryClient)
+  }, [auth.isAuthenticated, auth.isLoading, queryClient])
 
   if (auth.isLoading) {
     return (
@@ -29,7 +46,9 @@ function AutoSigninContent({ children }: PropsWithChildren) {
           >
             <Sparkles size={20} />
           </span>
-          <h1 className="text-2xl font-semibold tracking-tight text-foreground">Welcome back</h1>
+          <h1 className="font-display text-2xl font-semibold tracking-tight text-foreground">
+            Welcome back
+          </h1>
           <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
             Sign in to triage SAP exceptions, watch the agent work in real time, and clear your
             queue faster.

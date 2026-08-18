@@ -1,6 +1,6 @@
 TOOLING PURCHASE ORDER ACCRUAL PROCESSING
 STANDARD OPERATING PROCEDURE (SOP)
-Version 1.0 - Automated Accrual System
+Version 1.1 - Automated Accrual System
 
 ================================================================================
 MANDATORY RULES - READ THIS FIRST
@@ -9,7 +9,7 @@ MANDATORY RULES - READ THIS FIRST
 **CRITICAL: NO DATA FABRICATION**
 - NEVER make up or simulate data that doesn't exist in SAP
 - NEVER create fake journal document numbers, dates, or any other data
-- All document numbers, posting dates, and transaction data MUST come from actual SAP responses (found in last_sap_write_response after polling get_case_state)
+- All document numbers, posting dates, and transaction data MUST come from actual SAP responses — the write tool returns its result synchronously, so read that response directly and do NOT poll get_case_state for it
 - If SAP API calls fail or data is unavailable, STOP and report the issue
 - If you cannot complete a step due to missing data or API failures, communicate this clearly
 - Do NOT proceed with workflow if critical data is missing or fabricated
@@ -41,14 +41,15 @@ MANDATORY RULES - READ THIS FIRST
 - Wait for user to resolve the API issue
 
 **WHEN WBS PROJECT DATA UNAVAILABLE:**
-- Use PO delivery date from schedule lines as fallback (see WORKFLOW 2)
+- Use PO delivery date from schedule lines as fallback (see §5.3)
 - Document in state that fallback was used
 - Include note in finance email about data source
 - Continue processing with available data
 
 **WHEN EMAIL RESPONSE NEEDED:**
 - Send the email
-- Update case state to 'waiting_for_response' with timestamp
+- Update case state to 'awaiting_human_input'. The inquiry timestamp is recorded
+  automatically on entry to that status; do not send one in the update.
 - Add entry to processing_history
 - STOP processing and wait for actual response
 - DO NOT simulate or assume what the response will be
@@ -139,67 +140,72 @@ MANDATORY FIRST STEPS - ALL WORKFLOWS
 
 Before any processing, retrieve ALL required data from SAP APIs:
 
-**PO Header Data:**
-- PO Number (10-digit numeric string)
-- Total PO Amount (from header or calculated from line items)
-- PO Creation Date (PurchaseOrderDate)
-- PO Creator Email (for EMAIL_INQUIRY workflow)
-- Company Code
+1.1  PO header data:
+     - PO Number (10-digit numeric string)
+     - Total PO Amount (from header or calculated from line items)
+     - PO Creation Date (PurchaseOrderDate)
+     - PO Creator Email (for EMAIL_INQUIRY workflow)
+     - Company Code
 
-**PO Line Item Details:**
-- Line Item Number
-- Order Quantity
-- Unit Price (NetPriceAmount)
-- GL Account (10 alphanumeric characters)
-- Cost Center
-- Material/Service Description
+1.2  PO line item details:
+     - Line Item Number
+     - Order Quantity
+     - Unit Price (NetPriceAmount)
+     - GL Account (10 alphanumeric characters)
+     - Cost Center
+     - Material/Service Description
 
-**Schedule Line Data:**
-- Delivery Date (ScheduleLineDeliveryDate / "Need by" date)
-- Schedule Line Number
-- Confirmed Quantity
+1.3  Schedule line data:
+     - Delivery Date (ScheduleLineDeliveryDate / "Need by" date)
+     - Schedule Line Number
+     - Confirmed Quantity
 
-**Account Assignment:**
-- WBS Element (if exists - e.g., "ONG.004")
-- Cost Center
-- GL Account
+1.4  Account assignment:
+     - WBS Element (if exists - e.g., "ONG.004")
+     - Cost Center
+     - GL Account
 
-**Invoice History:**
-- All posted supplier invoices for this PO
-- Invoice Numbers
-- Invoice Amounts
-- Posting Dates
-- Invoice Line Item references
+1.5  Invoice history:
+     - All posted supplier invoices for this PO
+     - Invoice Numbers
+     - Invoice Amounts
+     - Posting Dates
+     - Invoice Line Item references
 
 **STEP 2: CALCULATE OUTSTANDING BALANCE (MANDATORY)**
 
-Using the actual SAP data retrieved in Step 1:
+Using the actual SAP data retrieved in STEP 1:
 
-**Calculation:**
-- Total PO Value = Order Quantity × Unit Price (from SAP line items)
-- Total Invoiced Amount = SUM of all invoice amounts (from SAP invoice history)
-- Outstanding Balance = Total PO Value - Total Invoiced Amount
+2.1  Calculate the balance:
+     - Total PO Value = Order Quantity × Unit Price (from SAP line items)
+     - Total Invoiced Amount = SUM of all invoice amounts (from SAP invoice history)
+     - Outstanding Balance = Total PO Value - Total Invoiced Amount
 
-**Decision Point:**
-- **IF Outstanding Balance = $0: STOP PROCESSING** (No accrual needed - fully invoiced)
-- **IF Outstanding Balance < $0: FLAG FOR MANUAL REVIEW** (Data quality issue - over-invoiced)
-- **IF Outstanding Balance > $0: CONTINUE** with workflow decision tree
+2.2  IF Outstanding Balance = $0: STOP PROCESSING (no accrual needed - fully
+     invoiced).
 
-**IMPORTANT NOTES:**
-- Paid amount tracking is not yet implemented (future enhancement)
-- Currently assuming paid amount = $0 for all calculations
-- Outstanding Balance represents the uninvoiced portion of the PO
-- **ALWAYS use Outstanding Balance (not full PO amount) for threshold decisions and accrual calculations**
+2.3  IF Outstanding Balance < $0: FLAG FOR MANUAL REVIEW (data quality issue -
+     over-invoiced).
+
+2.4  IF Outstanding Balance > $0: CONTINUE with the workflow decision tree.
+
+2.5  ALWAYS use Outstanding Balance (not full PO amount) for threshold decisions
+     and accrual calculations. Outstanding Balance represents the uninvoiced
+     portion of the PO. Paid amount tracking is not yet implemented, so all
+     calculations currently assume paid amount = $0.
 
 **STEP 3: DETERMINE WORKFLOW PATH**
 
-Using the Outstanding Balance calculated in Step 2:
+Using the Outstanding Balance calculated in STEP 2:
 
-**Decision Logic:**
-- Use ACTUAL Outstanding Balance (not total PO value) for all threshold comparisons
-- Check for WBS Element presence from account assignment data
-- Follow PRIMARY DECISION TREE (see below)
-- Document which workflow was selected and the reasoning
+3.1  Use ACTUAL Outstanding Balance (not total PO value) for all threshold
+     comparisons.
+
+3.2  Check for WBS Element presence from account assignment data.
+
+3.3  Follow the PRIMARY DECISION TREE (see DECISION HIERARCHY above).
+
+3.4  Document which workflow was selected and the reasoning.
 
 **Example:**
 - PO Total Value: $275,000
@@ -301,89 +307,110 @@ SAP PO Accrual Processing Agent
 WORKFLOW IMPLEMENTATIONS
 ================================================================================
 
-**WORKFLOW 1: EMAIL_INQUIRY**
+**WORKFLOW 1: EMAIL_INQUIRY (clauses 4.1-4.15)**
 Trigger: PO Amount > $300,000 OR (PO Amount >= $150,000 AND no WBS Element)
 Duration: 6 months average response time
 
 **Process:**
-1. Send inquiry email to {{CONTACT_PO_OWNER}} asking for expected completion date (YYYY-MM-DD format)
-2. Wait for response - update case state to 'waiting_for_response'
-3. Parse completion date from response and validate format
-4. Update PO delivery date in SAP schedule lines
-5. Poll get_case_state until last_sap_write_status is SUCCESS or FAILED for the write
-6. If FAILED: update case to 'error', notify finance, STOP
-6. Send confirmation to {{CONTACT_PO_OWNER}} with updated delivery date
-7. Calculate accrual using new delivery date (follow ACCRUAL CALCULATION PROCESS section)
-8. **VALIDATE calculation using ACCRUAL CALCULATION VALIDATION checklist**
-9. Send summary to {{CONTACT_FINANCE_TEAM}} using FINANCE APPROVAL EMAIL TEMPLATE
-10. Submit approval request ticket and STOP (see WHEN APPROVAL NEEDED)
-11. Once approved, park journal entry using ZACC_DOC_SRV with the calculated accrual amount
-12. Poll get_case_state until last_sap_write_status is SUCCESS or FAILED
-13. If SUCCESS: extract document number from last_sap_write_response, send confirmation to both {{CONTACT_PO_OWNER}} and {{CONTACT_FINANCE_TEAM}} with document number
-14. If FAILED: update case to 'error', notify finance with error details from last_sap_write_error
 
-**WORKFLOW 2: PROJECT_MILESTONE**
+4.1   Send inquiry email to {{CONTACT_PO_OWNER}} asking for expected completion
+      date (YYYY-MM-DD format).
+4.2   Wait for response - update case state to 'awaiting_human_input'.
+4.3   Parse completion date from response and validate format.
+4.4   Update PO delivery date in SAP schedule lines.
+4.5   Read the result from the write tool's own response — it returns
+      synchronously. Do NOT poll get_case_state; the case record carries no
+      write-status field.
+4.6   If the write failed: update case to 'error', notify finance, STOP.
+4.7   Send confirmation to {{CONTACT_PO_OWNER}} with updated delivery date.
+4.8   Calculate accrual using new delivery date (follow ACCRUAL CALCULATION
+      PROCESS section).
+4.9   VALIDATE calculation using the ACCRUAL CALCULATION VALIDATION checklist.
+4.10  Send summary to {{CONTACT_FINANCE_TEAM}} using FINANCE APPROVAL EMAIL
+      TEMPLATE.
+4.11  Submit approval request ticket and STOP (see WHEN APPROVAL NEEDED).
+4.12  Once approved, park journal entry using ZACC_DOC_SRV with the calculated
+      accrual amount.
+4.13  Read the write tool's own response — do NOT poll get_case_state.
+4.14  If it succeeded: take the document number from that response and send
+      confirmation to both {{CONTACT_PO_OWNER}} and {{CONTACT_FINANCE_TEAM}}.
+4.15  If it failed: update case to 'error', notify finance with the error detail
+      from that response.
+
+**WORKFLOW 2: PROJECT_MILESTONE (clauses 5.1-5.11)**
 Trigger: PO Amount >= $150,000 AND has WBS Element
 Duration: 12 months typical project lifecycle
 
 **Process:**
-1. Extract WBS element from PO account assignment
-2. Query project system for milestone dates (priority: Project milestone → WBS end date → Project end date)
-3. **FALLBACK**: If WBS project data unavailable, use PO delivery date from schedule lines
-4. Calculate accrual using determined end date (follow ACCRUAL CALCULATION PROCESS section)
-5. **VALIDATE calculation using ACCRUAL CALCULATION VALIDATION checklist**
-6. Send summary to {{CONTACT_FINANCE_TEAM}} using FINANCE APPROVAL EMAIL TEMPLATE (note if fallback was used)
-7. Submit approval request ticket and STOP (see WHEN APPROVAL NEEDED)
-8. Once approved, park journal entry using ZACC_DOC_SRV with the calculated accrual amount
-9. Poll get_case_state until last_sap_write_status is SUCCESS or FAILED
-10. If SUCCESS: extract document number from last_sap_write_response, send confirmation to {{CONTACT_FINANCE_TEAM}} with document number
-11. If FAILED: update case to 'error', notify finance with error details from last_sap_write_error
 
-**WORKFLOW 3: DELIVERY_DATE**
+5.1   Extract WBS element from PO account assignment.
+5.2   Query project system for milestone dates (priority: Project milestone → WBS
+      end date → Project end date).
+5.3   FALLBACK: If WBS project data unavailable, use PO delivery date from
+      schedule lines.
+5.4   Calculate accrual using determined end date (follow ACCRUAL CALCULATION
+      PROCESS section).
+5.5   VALIDATE calculation using the ACCRUAL CALCULATION VALIDATION checklist.
+5.6   Send summary to {{CONTACT_FINANCE_TEAM}} using FINANCE APPROVAL EMAIL
+      TEMPLATE (note if fallback was used).
+5.7   Submit approval request ticket and STOP (see WHEN APPROVAL NEEDED).
+5.8   Once approved, park journal entry using ZACC_DOC_SRV with the calculated
+      accrual amount.
+5.9   Read the write tool's own response — do NOT poll get_case_state.
+5.10  If it succeeded: take the document number from that response and send
+      confirmation to {{CONTACT_FINANCE_TEAM}}.
+5.11  If it failed: update case to 'error', notify finance with the error detail
+      from that response.
+
+**WORKFLOW 3: DELIVERY_DATE (clauses 6.1-6.10)**
 Trigger: PO Amount < $150,000
 Duration: Based on actual SAP delivery date
 
 **Process:**
-1. Extract delivery date from SAP schedule lines
-2. Validate date is reasonable (not in past, not >5 years future)
-3. Calculate accrual using SAP delivery date (follow ACCRUAL CALCULATION PROCESS section)
-4. **VALIDATE calculation using ACCRUAL CALCULATION VALIDATION checklist**
-5. Send summary to {{CONTACT_FINANCE_TEAM}} using FINANCE APPROVAL EMAIL TEMPLATE
-6. Submit approval request ticket and STOP (see WHEN APPROVAL NEEDED)
-7. Once approved, park journal entry using ZACC_DOC_SRV with the calculated accrual amount
-8. Poll get_case_state until last_sap_write_status is SUCCESS or FAILED
-9. If SUCCESS: extract document number from last_sap_write_response, send confirmation to {{CONTACT_FINANCE_TEAM}} with document number
-10. If FAILED: update case to 'error', notify finance with error details from last_sap_write_error
+
+6.1   Extract delivery date from SAP schedule lines.
+6.2   Validate date is reasonable (not in past, not >5 years future).
+6.3   Calculate accrual using SAP delivery date (follow ACCRUAL CALCULATION
+      PROCESS section).
+6.4   VALIDATE calculation using the ACCRUAL CALCULATION VALIDATION checklist.
+6.5   Send summary to {{CONTACT_FINANCE_TEAM}} using FINANCE APPROVAL EMAIL
+      TEMPLATE.
+6.6   Submit approval request ticket and STOP (see WHEN APPROVAL NEEDED).
+6.7   Once approved, park journal entry using ZACC_DOC_SRV with the calculated
+      accrual amount.
+6.8   Read the write tool's own response — do NOT poll get_case_state.
+6.9   If it succeeded: take the document number from that response and send
+      confirmation to {{CONTACT_FINANCE_TEAM}}.
+6.10  If it failed: update case to 'error', notify finance with the error detail
+      from that response.
 
 ================================================================================
-ACCRUAL CALCULATION PROCESS
+ACCRUAL CALCULATION PROCESS (clauses 7.1-7.5)
 ================================================================================
 
-**STEP 1: Determine PO Balance**
-- Get current PO amount from SAP
-- Get invoiced amount from supplier invoices
-- Paid amount currently $0 (payment integration not implemented)
-- Calculate: Outstanding Balance = Total PO Value - Invoiced Amount
+7.1  Determine PO balance:
+     - Get current PO amount from SAP
+     - Get invoiced amount from supplier invoices
+     - Paid amount currently $0 (payment integration not implemented)
+     - Calculate: Outstanding Balance = Total PO Value - Invoiced Amount
 
-**STEP 2: Determine Time Period**
-- Start Date: PO creation date
-- End Date: Determined from workflow (inquiry/milestone/delivery)
-- Calculate total duration in months
+7.2  Determine the time period:
+     - Start Date: PO creation date
+     - End Date: Determined from workflow (inquiry/milestone/delivery)
+     - Calculate total duration in months
 
-**STEP 3: Calculate Monthly Accrual Rate**
-Formula: Monthly Rate = Outstanding Balance / Total Duration in Months
+7.3  Calculate the monthly accrual rate:
+       Monthly Rate = Outstanding Balance / Total Duration in Months
 
-**STEP 4: Calculate Current Month-End Accrual**
-- Month End Date: Last day of current month (e.g., November 30, 2025)
-- Time Elapsed: Months from PO creation date to month end date
-- Accrual Amount = Monthly Rate × Time Elapsed (in months)
+7.4  Calculate the current month-end accrual:
+     - Month End Date: Last day of current month (e.g., November 30, 2025)
+     - Time Elapsed: Months from PO creation date to month end date
+     - Accrual Amount = Monthly Rate × Time Elapsed (in months)
 
-**IMPORTANT:**
-- Accruals are calculated for month-end close
-- Calculate time elapsed from PO creation to the last day of the current month
-- Use Outstanding Balance (not total PO value) for accrual calculations
-- If Outstanding Balance = 0: No accrual needed (fully invoiced)
-- If Outstanding Balance < 0: Flag for manual review (over-invoiced)
+7.5  Accruals are calculated for month-end close. Calculate time elapsed from PO
+     creation to the last day of the current month. Use Outstanding Balance (not
+     total PO value). If Outstanding Balance = 0, no accrual is needed (fully
+     invoiced); if < 0, flag for manual review (over-invoiced).
 
 **Example Calculation:**
 - PO Creation: November 24, 2025
@@ -413,29 +440,30 @@ OR if calculating for full first month:
 
 ================================================================================
 ACCRUAL CALCULATION VALIDATION (CRITICAL - READ BEFORE SENDING EMAILS)
+(clauses 8.1-8.4)
 ================================================================================
 
 **BEFORE SENDING ANY EMAIL TO FINANCE, YOU MUST VALIDATE YOUR CALCULATIONS:**
 
-**Validation Rule 1: Accrual Amount Must Be Time-Proportional**
-- If Time Elapsed < Total Duration, then Accrual Amount MUST BE < Outstanding Balance
-- Example: If time elapsed is 0.2 months out of 14 months, accrual should be ~1.4% of balance
-- NEVER use the full Outstanding Balance as the Accrual Amount unless time elapsed equals total duration
+8.1  Accrual amount MUST be time-proportional:
+     - If Time Elapsed < Total Duration, then Accrual Amount MUST BE < Outstanding Balance
+     - Example: If time elapsed is 0.2 months out of 14 months, accrual should be ~1.4% of balance
+     - NEVER use the full Outstanding Balance as the Accrual Amount unless time elapsed equals total duration
 
-**Validation Rule 2: Sanity Check the Percentage**
-- Calculate: Accrual Percentage = (Time Elapsed / Total Duration) × 100%
-- Verify: Accrual Amount ≈ Outstanding Balance × Accrual Percentage
-- If Accrual Amount = Outstanding Balance and Time Elapsed < Total Duration, YOU MADE A MISTAKE
+8.2  Sanity check the percentage:
+     - Calculate: Accrual Percentage = (Time Elapsed / Total Duration) × 100%
+     - Verify: Accrual Amount ≈ Outstanding Balance × Accrual Percentage
+     - If Accrual Amount = Outstanding Balance and Time Elapsed < Total Duration, YOU MADE A MISTAKE
 
-**Validation Rule 3: Month-End Date Must Be Dynamic**
-- NEVER hardcode month-end dates
-- Calculate month-end date as the last day of the current month based on today's date
-- Example: If today is November 23, 2025, month-end date = November 30, 2025
+8.3  Month-end date MUST be dynamic:
+     - NEVER hardcode month-end dates
+     - Calculate month-end date as the last day of the current month based on today's date
+     - Example: If today is November 23, 2025, month-end date = November 30, 2025
 
-**Validation Rule 4: Time Elapsed Calculation**
-- Time Elapsed = (Month End Date - PO Creation Date) in months
-- Include fractional months (e.g., 6 days = 0.2 months)
-- Time Elapsed should be a small number if we're early in the month
+8.4  Time elapsed calculation:
+     - Time Elapsed = (Month End Date - PO Creation Date) in months
+     - Include fractional months (e.g., 6 days = 0.2 months)
+     - Time Elapsed should be a small number if we're early in the month
 
 **COMMON MISTAKES TO AVOID:**
 

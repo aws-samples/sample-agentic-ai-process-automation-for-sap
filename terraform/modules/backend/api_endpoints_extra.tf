@@ -66,6 +66,10 @@ resource "aws_lambda_function" "observability_api" {
   filename         = data.archive_file.observability_api.output_path
   source_code_hash = data.archive_file.observability_api.output_base64sha256
 
+  # Needed for the case_key codec — trace records are labelled with a canonical
+  # case identity the UI can link on.
+  layers = [aws_lambda_layer_version.shared_types.arn]
+
   environment {
     variables = {
       METRICS_NAMESPACE    = "ERPAgent"

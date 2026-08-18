@@ -19,6 +19,10 @@ from decimal import Decimal
 
 import requests
 
+# Canonical case identity codec — ships in the shared_types layer alongside the
+# models. Imported unconditionally: a case cannot be created without an id.
+from case_key import CaseKeyError, format_case_id
+
 # WorkItem model + validator ship in the shared_types Lambda layer. Import is
 # best-effort: the layer (and pydantic) aren't present in local dev/test, where
 # validation simply no-ops. In the deployed Lambda both are on the path.
@@ -434,7 +438,17 @@ def poll_domain(
                 skipped += 1
                 continue
 
-            if case_exists_fn(table, doc_number, item_id):
+            try:
+                case_id = format_case_id(doc_number, item_id)
+            except CaseKeyError as e:
+                # An id we cannot represent canonically has no partition key and
+                # would be unroutable downstream (SQS group, ticket correlation,
+                # URL), so skip the case loudly instead of minting a broken one.
+                print(f"Skipping {label} case with unusable key: {e}")
+                skipped += 1
+                continue
+
+            if case_exists_fn(table, case_id):
                 skipped += 1
                 continue
 
@@ -450,6 +464,7 @@ def poll_domain(
 
             now = datetime.utcnow().isoformat()
             case_item = {
+                "case_id": case_id,
                 "document_number": doc_number,
                 "item_id": item_id,
                 "domain": domain,
@@ -467,11 +482,11 @@ def poll_domain(
             try:
                 if put_case_fn(table, case_item):
                     created += 1
-                    print(f"Created {label} case: {doc_number}/{item_id}")
-                    enqueue_fn(f"{doc_number}#{item_id}", domain, process_type)
+                    print(f"Created {label} case: {case_id}")
+                    enqueue_fn(case_id, domain, process_type)
                 else:
                     skipped += 1
             except Exception as e:
-                print(f"Error creating {label} case {doc_number}-{item_id}: {e}")
+                print(f"Error creating {label} case {case_id}: {e}")
 
     return created, skipped

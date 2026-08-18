@@ -79,6 +79,17 @@ locals {
 
   # Must stay in sync with the equivalent value in the CDK backend-stack.ts.
   memory_event_expiry_days = 30
+
+  # process_type → skill_id, read from skills/*/config.json at plan.
+  # The exemplar builder needs this to write exemplars under the key
+  # skill_router reads back (see test_exemplar_key_parity), but its Lambda
+  # asset is just lambdas/exemplar_builder/ — skills/ never ships with it.
+  process_type_skill_map = merge([
+    for config_file in fileset("${local.project_root}/skills", "*/config.json") : {
+      for process_type, _ in jsondecode(file("${local.project_root}/skills/${config_file}")).process_type_to_sop :
+      process_type => jsondecode(file("${local.project_root}/skills/${config_file}")).skill_id
+    }
+  ]...)
 }
 # =============================================================================
 # =============================================================================

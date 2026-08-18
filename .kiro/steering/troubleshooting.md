@@ -41,7 +41,6 @@ SPDX-License-Identifier: Apache-2.0
 **Fix:** Check the SSM parameter exists: `aws ssm get-parameter --name "/{stack_name_base}/secrets/sap-credentials-arn"`. The canonical paths are:
 - `/{stack_name_base}/secrets/sap-credentials-arn` — SAP credentials secret ARN
 - `/{stack_name_base}/autonomy/trigger-mode` — trigger mode
-- `/{stack_name_base}/autonomy/action-mode` — action mode
 
 ## SAP Credentials Not Working
 
@@ -104,3 +103,41 @@ make local-config
 1. Verify the Lambda architecture: `aws lambda get-function-configuration --function-name NAME --query Architectures`
 2. Ensure it matches the bundled wheel platform. For `manylinux2014_aarch64` wheels, set `architecture: lambda.Architecture.ARM_64` in CDK
 3. The `cryptography` package must be bundled with the Lambda directly (in `requirements.txt`), not in a Lambda layer
+
+
+## Stack delete fails on PolicyEngine
+
+**Symptom:** `delete-stack` leaves the backend stack in `DELETE_FAILED`:
+
+```
+PolicyEngine — DELETE_FAILED
+Error: DELETE: cannot change the physical resource ID from "NOT_AVAILABLE" to "NONE" during deletion
+```
+
+**Root cause:** The PolicyEngine custom resource never received a real physical ID on create — `PolicyEngineId` is output as `NOT_AVAILABLE` — and on delete the provider returns `NONE`. CloudFormation rejects any physical-ID change during deletion, so the resource can never delete itself. This affects every deployment, not just failed ones.
+
+**Fix:** Confirm nothing would be orphaned, then retry the delete retaining that one resource:
+
+```bash
+aws verifiedpermissions list-policy-stores          # expect an empty list
+aws cloudformation delete-stack \
+  --stack-name {stack_name_base}-backend \
+  --retain-resources PolicyEngine
+aws cloudformation wait stack-delete-complete --stack-name {stack_name_base}-backend
+```
+
+An empty policy-store list means the custom resource created nothing, so retaining it leaks nothing. If a store *does* exist for your stack, delete it by hand afterwards.
+
+The real fix is for the provider to return a stable physical ID on create and echo it unchanged on delete. Until then, teardown needs this manual step.
+
+## CloudTrail "already has 5 trails"
+
+**Symptom:** The backend stack fails on `Observability/SsmTrail`:
+
+```
+User: <account> already has 5 trails in us-east-1.
+```
+
+**Root cause:** CloudTrail allows 5 trails per Region and it is a hard limit, not a raisable quota. The trail behind the M7 autonomy-change alarm consumes one slot per deployment.
+
+**Fix:** It is opt-in and off by default, so a current checkout will not hit this. If you enabled `security.audit_trail_enabled`, either turn it off or free a slot. Do not delete an organization trail (a Control Tower landing zone owns one) — it serves every account in the org, and its log bucket usually lives in a different account.

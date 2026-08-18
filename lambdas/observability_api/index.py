@@ -22,6 +22,9 @@ from datetime import datetime, timedelta, timezone
 
 import boto3
 
+# Canonical case identity codec — ships in the shared_types layer.
+from case_key import CaseKeyError, format_case_id
+
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
@@ -691,7 +694,20 @@ def _handle_traces(qs: dict, origin: str) -> dict:
         doc_num = case.get("document_number", "")
         item_id = case.get("item_id", "")
         process_type = case.get("process_type", "")
-        case_id = f"{doc_num}/{item_id}"
+        # Label traces with the same identity the rest of the system uses, so the UI
+        # can link a trace straight to its case. Records written before the poller
+        # stored case_id are derived from their key.
+        case_id = case.get("case_id")
+        if not case_id:
+            try:
+                case_id = format_case_id(doc_num, item_id)
+            except CaseKeyError:
+                logger.warning(
+                    "Skipping traces for case with unusable key: %r/%r",
+                    doc_num,
+                    item_id,
+                )
+                continue
 
         for trace in agent_traces:
             try:

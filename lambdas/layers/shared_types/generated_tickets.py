@@ -78,7 +78,8 @@ class Ticket(BaseModel):
         None, description="Person or team assigned to the ticket."
     )
     case_id: str | None = Field(
-        None, description="Related ERP case ID for correlation (doc#item format)."
+        None,
+        description="Related ERP case identity for correlation, canonical {document_number}-{item_id} form. Built and parsed only via the case_key codec.",
     )
     category: str | None = Field(
         None, description="Ticket category (e.g. approval_request, exception, inquiry)."

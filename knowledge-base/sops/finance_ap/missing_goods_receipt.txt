@@ -1,0 +1,132 @@
+MISSING GOODS RECEIPT — INVOICE EXCEPTION RESOLUTION
+STANDARD OPERATING PROCEDURE (SOP)
+Version 1.0
+
+================================================================================
+PURPOSE
+================================================================================
+
+This SOP defines how the agent resolves a MISSING GOODS RECEIPT exception, where
+a supplier invoice has been received but no goods receipt (GR) has been posted
+against the referenced purchase order (PO) in SAP S/4HANA. It applies after
+three-way-match classification has identified the exception as a missing GR.
+
+The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT",
+"SHOULD", "SHOULD NOT", "RECOMMENDED", "MAY", and "OPTIONAL" in this
+document are to be interpreted as described in RFC 2119.
+
+================================================================================
+SCOPE
+================================================================================
+
+Process Type: missing_goods_receipt
+SAP Modules:  MM (Materials Management), FI-AP (Accounts Payable)
+SAP Service:  API_SUPPLIERINVOICE_PROCESS_SRV
+Entities:     A_SupplierInvoice, A_PurchaseOrder, A_MaterialDocumentHeader
+
+================================================================================
+PRECONDITIONS
+================================================================================
+
+Before execution, the following MUST be true:
+
+1. The SAP MCP Server is reachable for reads.
+2. The case payload contains the supplier invoice number and fiscal year.
+3. The agent has NO memory of prior runs — each execution is stateless.
+
+================================================================================
+STEP 1: GATHER DATA
+================================================================================
+
+1.1  The agent MUST retrieve the invoice header and line items
+     (A_SupplierInvoice), including the PO reference and expected delivery date.
+1.2  The agent MUST query material documents (A_MaterialDocumentHeader) for the
+     PO line to confirm that no goods receipt exists.
+1.3  The agent MUST read the PO schedule line (A_PurchaseOrderScheduleLine) and
+     record its DeliveryDate. There is no delivery-tracking or ASN feed available
+     to the agent, so the scheduled delivery date is the only in-transit signal.
+
+================================================================================
+STEP 2: DETERMINE GOODS-RECEIPT STATUS
+================================================================================
+
+2.1  The agent MUST classify the situation as exactly one of:
+     - GOODS IN TRANSIT — the PO schedule-line DeliveryDate is today or later.
+     - NO RECEIPT, WITHIN WINDOW — the DeliveryDate has passed, but the invoice
+       is within {{MISSING_GR_ESCALATION_DAYS}} business days of receipt.
+     - NO RECEIPT, OVERDUE — no GR after {{MISSING_GR_ESCALATION_DAYS}} business
+       days.
+
+================================================================================
+STEP 3: APPLY RESOLUTION LOGIC
+================================================================================
+
+3.1  IF GOODS IN TRANSIT:
+     - The agent has no timer and MUST NOT promise to revisit the case itself.
+       It MUST raise a ticket to {{CONTACT_WAREHOUSE}} stating the PO#, invoice#,
+       the scheduled DeliveryDate, and the date the invoice should be re-checked
+       ({{GOODS_IN_TRANSIT_REMINDER_DAYS}} business days out).
+     - The agent MUST update case state to "awaiting_human_input" with that
+       re-check date and STOP.
+
+3.2  IF NO RECEIPT, WITHIN WINDOW:
+     - The agent MUST send an email to {{CONTACT_WAREHOUSE}} asking them to
+       confirm received quantities and the expected receipt date. Include PO#,
+       invoice#, vendor name, and the expected delivery date from the PO.
+     - The agent MUST update case state to "awaiting_human_input" and STOP.
+     - When the warehouse responds, the agent MUST use the confirmed quantities
+       to continue resolution.
+
+3.3  IF NO RECEIPT, OVERDUE:
+     - The agent MUST escalate to {{CONTACT_PROCUREMENT}} with PO#, invoice#,
+       vendor, and the number of business days overdue.
+     - The agent MUST update case state to "manual_review_required" and STOP.
+
+3.4  The agent MUST NOT post an invoice that has no corresponding goods receipt
+     unless a human explicitly approves via one of the paths above.
+
+================================================================================
+STEP 4: CLOSE OR HAND OFF
+================================================================================
+
+4.1  Once a goods receipt is confirmed or posted, the agent MUST re-run
+     three-way matching to resolve any residual quantity or price variance.
+4.2  IF a write fails at any point, the agent MUST set the case to 'error',
+     notify {{CONTACT_AP_TEAM}}, and STOP.
+
+================================================================================
+ESCALATION RULES
+================================================================================
+
+| Trigger                                   | Action                           |
+|-------------------------------------------|----------------------------------|
+| Goods in transit                          | Hold + reminder                  |
+| No receipt within window                  | Query {{CONTACT_WAREHOUSE}}      |
+| No receipt overdue                        | Escalate {{CONTACT_PROCUREMENT}} |
+| SAP write failure                         | Notify {{CONTACT_AP_TEAM}}       |
+
+================================================================================
+CONTACTS
+================================================================================
+
+- Warehouse/Receiving: {{CONTACT_WAREHOUSE}}
+- Procurement:         {{CONTACT_PROCUREMENT}}
+- AP Team:             {{CONTACT_AP_TEAM}}
+
+================================================================================
+TOLERANCES (CONFIGURABLE — DECLARED IN skills/finance_ap/config.json)
+================================================================================
+
+| Parameter                        | Symbol                             |
+|----------------------------------|------------------------------------|
+| Missing GR escalation (days)     | {{MISSING_GR_ESCALATION_DAYS}}     |
+| Goods-in-transit reminder (days) | {{GOODS_IN_TRANSIT_REMINDER_DAYS}} |
+
+================================================================================
+REVISION HISTORY
+================================================================================
+
+| Version | Date       | Author | Changes                              |
+|---------|------------|--------|--------------------------------------|
+| 1.0     | 2026-07-21 | Kiro   | Initial focused SOP split from       |
+|         |            |        | invoice_matching v1.0                |

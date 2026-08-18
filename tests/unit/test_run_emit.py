@@ -125,6 +125,30 @@ def test_cdk_inputs_falls_back_to_config_when_env_unset(tmp_path, monkeypatch):
     assert profile == "cognito-basic"
 
 
+def test_cdk_inputs_accepts_legacy_sap_nested_profile(tmp_path, monkeypatch):
+    # Compatibility for configs copied while the example incorrectly nested the
+    # deployment selector under sap:. It must not silently select cognito-basic.
+    import run_emit
+
+    cfg = tmp_path / "config.yaml"
+    cfg.write_text("sap:\n  auth_profile: cognito-m2m\n")
+    monkeypatch.setattr(run_emit, "_CDK_CONFIG", cfg)
+    monkeypatch.delenv("AUTH_PROFILE", raising=False)
+    profile, inbound, frontend, mcp_enabled = run_emit._cdk_inputs()
+    assert profile == "cognito-m2m"
+    assert inbound is None
+    assert frontend is None
+    assert mcp_enabled is False
+
+
+def test_cdk_config_example_declares_auth_profile_at_top_level():
+    import yaml
+
+    config = yaml.safe_load((_REPO_ROOT / "cdk" / "config.yaml.example").read_text())
+    assert config["auth_profile"] == "cognito-basic"
+    assert "auth_profile" not in config.get("sap", {})
+
+
 def test_cdk_inputs_reads_sap_mcp_enabled(tmp_path, monkeypatch):
     import run_emit
 
@@ -204,10 +228,40 @@ def test_terraform_rejects_cdk_only_profile():
 from run_emit import _outbound_block  # noqa: E402
 
 
+def test_terraform_rejects_a_live_only_profile():
+    """A live-only profile is the inverse of the batch case: Terraform has no module
+    gap, it just cannot withhold the autonomous pipeline the way CDK now does. It must
+    fail at plan rather than deploy a poller and queue nothing can ever trigger."""
+    from run_emit import _cdk_only_axes
+    from utils.auth_profiles import load_catalog, resolve_profile
+
+    profile = resolve_profile("entra-obo")
+    assert "autonomous" not in profile.mode, "fixture assumes entra-obo is live-only"
+
+    reasons = _cdk_only_axes(profile, load_catalog())
+    assert any("omits 'autonomous'" in r for r in reasons), reasons
+
+    # And the reverse: a profile that declares autonomous is not blocked for that.
+    autonomous = _cdk_only_axes(resolve_profile("cognito-basic"), load_catalog())
+    assert not any("autonomous" in r for r in autonomous), autonomous
+
+
 def test_outbound_block_basic_is_none():
     from utils.auth_profiles import resolve_profile
 
     assert _outbound_block(resolve_profile("cognito-basic")) is None
+
+
+def test_outbound_block_basic_emits_service_when_mcp_path():
+    from utils.auth_profiles import resolve_profile
+
+    block = _outbound_block(resolve_profile("cognito-basic"), mcp_path=True)
+    assert block == {
+        "flow": "BASIC",
+        "service_enabled": True,
+        "user_enabled": False,
+        "issuer_type": None,
+    }
 
 
 def test_outbound_block_m2m_service_only():
@@ -246,6 +300,20 @@ def test_run_emit_cognito_basic_still_writes_nothing(tmp_path):
     out = tmp_path / "artifact.json"
     assert run_emit("cognito-basic", overrides=None, out_path=str(out)) is None
     assert not out.exists()
+
+
+def test_run_emit_cognito_basic_writes_outbound_when_mcp_path(tmp_path):
+    # When sap_mcp is enabled (mcp_path=True), cognito-basic must emit an outbound
+    # block so the SAP MCP Service Gateway target is retained. BASIC describes the
+    # external MCP-to-SAP hop; Gateway-to-external-runtime uses OAuth client creds.
+    out = tmp_path / "artifact.json"
+    result = run_emit("cognito-basic", overrides=None, out_path=str(out), mcp_path=True)
+    assert result is not None
+    assert out.exists()
+    assert result["outbound"]["flow"] == "BASIC"
+    assert result["outbound"]["service_enabled"] is True
+    assert result["outbound"]["user_enabled"] is False
+    assert "inbound" not in result  # cognito inbound -> no inbound block
 
 
 def test_run_emit_direct_obo_on_mcp_path_emits(tmp_path):
@@ -342,7 +410,7 @@ def test_cognito_basic_frontend_block_is_none():
     assert _frontend_block(profile, None) is None
 
 
-from run_emit import _mode_block  # noqa: E402
+from run_emit import _mode_block, _mode_requires_cdk  # noqa: E402
 
 
 def _catalog():
@@ -357,10 +425,31 @@ def test_mode_block_autonomous_live_is_none():
     assert _mode_block(resolve_profile("cognito-basic"), _catalog()) is None
 
 
-def test_mode_block_live_only_is_none():
+def test_mode_block_live_only_emits_the_constraint():
+    # A profile withholding 'autonomous' MUST carry the list so CDK can refuse to
+    # wire the poller schedule and SQS consumer. Previously this returned None —
+    # nothing declared an iac_module — so the constraint never reached CDK and the
+    # agent re-derived it at runtime from token presence.
     from utils.auth_profiles import resolve_profile
 
-    assert _mode_block(resolve_profile("cognito-userfed-ias"), _catalog()) is None
+    block = _mode_block(resolve_profile("cognito-userfed-ias"), _catalog())
+    assert block == {
+        "modes": ["live"],
+        "batch_runner_enabled": False,
+        "requires_refresh": False,
+    }
+
+
+def test_mode_requires_cdk_is_iac_module_only():
+    # The Terraform loud-fail predicate must stay keyed on iac_module presence, NOT on
+    # whether _mode_block emits. Splitting them is what lets a live-only profile carry
+    # its mode list without falsely reporting "includes 'batch'" to the Terraform path.
+    from utils.auth_profiles import resolve_profile
+
+    cat = _catalog()
+    assert _mode_requires_cdk(resolve_profile("cognito-userfed-ias", cat), cat) is False
+    assert _mode_requires_cdk(resolve_profile("cognito-basic", cat), cat) is False
+    assert _mode_requires_cdk(resolve_profile("entra-userfed", cat), cat) is True
 
 
 def test_mode_block_batch_enabled():
@@ -399,20 +488,22 @@ def test_run_emit_entra_userfed_writes_mode_block(tmp_path):
     assert out.exists()
 
 
-def test_run_emit_batch_with_non_refresh_outbound_raises(tmp_path):
+def test_run_emit_batch_with_non_refresh_user_outbound_raises(tmp_path):
     # existing validate_profile guard must fire BEFORE emit — not duplicated here.
+    # Only the USER-IDENTITY flavour is rejected: a service identity re-mints per
+    # run, so batch over m2m/basic is legal (see test_auth_profiles.py).
     from utils.auth_profiles import load_catalog
 
     cat = load_catalog()
-    cat["profiles"]["_t_batch_basic"] = {
-        "frontend": "cognito",
-        "inbound": "cognito",
+    cat["profiles"]["_t_batch_obo"] = {
+        "frontend": "direct-entra",
+        "inbound": "entra",
         "mode": ["batch"],
-        "outbound": "basic",
+        "outbound": "obo",
     }
     out = tmp_path / "artifact.json"
     with pytest.raises(ProfileValidationError):
-        run_emit("_t_batch_basic", overrides=None, out_path=str(out), catalog=cat)
+        run_emit("_t_batch_obo", overrides=None, out_path=str(out), catalog=cat)
     assert not out.exists()
 
 

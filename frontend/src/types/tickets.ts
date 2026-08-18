@@ -6,26 +6,44 @@ export { TicketStatus, TicketPriority } from "./generated-tickets"
 export type { Ticket, TicketComment } from "./generated-tickets"
 
 import { TicketStatus, TicketPriority } from "./generated-tickets"
+import type { StatusTone } from "@/lib/statusTone"
 
-// UI-only display metadata — not part of the schema
-export const TICKET_STATUS_META: Record<
-  TicketStatus,
-  { label: string; color: string; emoji: string }
-> = {
-  [TicketStatus.Open]: { label: "Open", color: "bg-blue-100 text-blue-800", emoji: "🔵" },
-  [TicketStatus.Assigned]: {
-    label: "Assigned",
-    color: "bg-yellow-100 text-yellow-800",
-    emoji: "🟡",
-  },
-  [TicketStatus.Approved]: { label: "Approved", color: "bg-green-100 text-green-800", emoji: "✅" },
-  [TicketStatus.Denied]: { label: "Denied", color: "bg-red-100 text-red-800", emoji: "🔴" },
-  [TicketStatus.Replied]: { label: "Replied", color: "bg-purple-100 text-purple-800", emoji: "💬" },
-  [TicketStatus.Closed]: { label: "Closed", color: "bg-gray-100 text-gray-800", emoji: "⚫" },
+// UI-only display metadata — not part of the schema.
+// `tone` selects the shared state colour — see lib/statusTone.ts. Emoji were
+// dropped with the shared badge: screen readers announce them literally
+// ("large blue circle"), and the badge already carries a colour-coded dot.
+export const TICKET_STATUS_META: Record<TicketStatus, { label: string; tone: StatusTone }> = {
+  [TicketStatus.Open]: { label: "Open", tone: "info" },
+  [TicketStatus.Assigned]: { label: "Assigned", tone: "progress" },
+  [TicketStatus.Approved]: { label: "Approved", tone: "success" },
+  [TicketStatus.Denied]: { label: "Denied", tone: "danger" },
+  // A human has answered and the agent is expected to pick it back up.
+  [TicketStatus.Replied]: { label: "Replied", tone: "info" },
+  [TicketStatus.Closed]: { label: "Closed", tone: "neutral" },
 }
 
-export const TICKET_PRIORITY_META: Record<TicketPriority, { label: string; color: string }> = {
-  [TicketPriority.High]: { label: "High", color: "bg-red-100 text-red-800" },
-  [TicketPriority.Medium]: { label: "Medium", color: "bg-yellow-100 text-yellow-800" },
-  [TicketPriority.Low]: { label: "Low", color: "bg-green-100 text-green-800" },
+/** Display metadata for a ticket status, tolerating unknown values from older records. */
+export function ticketStatusMeta(status: TicketStatus | string): {
+  label: string
+  tone: StatusTone
+} {
+  return TICKET_STATUS_META[status as TicketStatus] ?? TICKET_STATUS_META[TicketStatus.Open]
+}
+
+// Priority is urgency, not state, but it is still colour-as-meaning, so it maps
+// onto the same tone vocabulary rather than carrying its own palette classes.
+export const TICKET_PRIORITY_META: Record<TicketPriority, { label: string; tone: StatusTone }> = {
+  [TicketPriority.High]: { label: "High", tone: "danger" },
+  [TicketPriority.Medium]: { label: "Medium", tone: "progress" },
+  [TicketPriority.Low]: { label: "Low", tone: "neutral" },
+}
+
+/** Display metadata for a ticket priority, tolerating unknown values from older records. */
+export function ticketPriorityMeta(priority: TicketPriority | string): {
+  label: string
+  tone: StatusTone
+} {
+  return (
+    TICKET_PRIORITY_META[priority as TicketPriority] ?? TICKET_PRIORITY_META[TicketPriority.Medium]
+  )
 }

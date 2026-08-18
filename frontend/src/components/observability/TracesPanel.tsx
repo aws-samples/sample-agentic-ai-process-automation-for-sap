@@ -1,8 +1,6 @@
 // Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
-"use client"
-
 import { useState, useMemo } from "react"
 import {
   ChevronDown,
@@ -18,6 +16,7 @@ import {
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card"
 import type { TraceRecord } from "@/services/observabilityService"
 import { getOutcomeColor, filterErrorTraces, sortAndLimitTraces } from "./utils/traceUtils"
+import { TONE_TEXT } from "@/lib/statusTone"
 import TraceStats from "./TraceStats"
 import SpanTimeline from "./SpanTimeline"
 import SessionView from "./SessionView"
@@ -29,25 +28,43 @@ import "./observability-animations.css"
 const DESKTOP_LIMIT = 25
 const MOBILE_LIMIT = 10
 
-/** Map trigger strings to icons and labels for badges. */
+// Trigger is categorical, not state, so these keep distinct hues (with dark
+// variants) rather than mapping onto the tone vocabulary.
 const TRIGGER_STYLE: Record<string, { icon: typeof Bot; label: string; className: string }> = {
-  poller: { icon: Timer, label: "Poller", className: "bg-amber-100 text-amber-700" },
-  manual: { icon: User, label: "Manual", className: "bg-blue-100 text-blue-700" },
-  "webhook-ses": { icon: Webhook, label: "Email", className: "bg-purple-100 text-purple-700" },
-  webhook: { icon: Webhook, label: "Webhook", className: "bg-purple-100 text-purple-700" },
+  poller: {
+    icon: Timer,
+    label: "Poller",
+    className: "bg-amber-100 text-amber-800 dark:bg-amber-400/15 dark:text-amber-300",
+  },
+  manual: {
+    icon: User,
+    label: "Manual",
+    className: "bg-blue-100 text-blue-800 dark:bg-blue-400/15 dark:text-blue-300",
+  },
+  "webhook-ses": {
+    icon: Webhook,
+    label: "Email",
+    className: "bg-purple-100 text-purple-800 dark:bg-purple-400/15 dark:text-purple-300",
+  },
+  webhook: {
+    icon: Webhook,
+    label: "Webhook",
+    className: "bg-purple-100 text-purple-800 dark:bg-purple-400/15 dark:text-purple-300",
+  },
 }
 
-/** Map outcome to Tailwind border-left color class. */
+/** Map outcome to a left-accent colour. -500 weights read on both grounds; the
+    default falls back to the theme border. */
 function getOutcomeBorderClass(outcome: string): string {
   switch (outcome) {
     case "complete":
-      return "border-l-green-500"
+      return "border-l-emerald-500"
     case "error":
       return "border-l-red-500"
     case "cancelled":
-      return "border-l-yellow-500"
+      return "border-l-amber-500"
     default:
-      return "border-l-gray-400"
+      return "border-l-border"
   }
 }
 
@@ -71,13 +88,13 @@ function getOutcomeLabel(outcome: string): string {
 function getOutcomeTextClass(outcome: string): string {
   switch (outcome) {
     case "complete":
-      return "text-green-600"
+      return TONE_TEXT.success
     case "error":
-      return "text-red-600"
+      return TONE_TEXT.danger
     case "cancelled":
-      return "text-yellow-600"
+      return TONE_TEXT.progress
     default:
-      return "text-gray-500"
+      return "text-muted-foreground"
   }
 }
 
@@ -87,12 +104,12 @@ function TriggerBadge({ trigger }: { trigger: string }) {
   const style = TRIGGER_STYLE[trigger] ?? {
     icon: Bot,
     label: trigger || "agent",
-    className: "bg-gray-100 text-gray-600",
+    className: "bg-muted text-muted-foreground",
   }
   const Icon = style.icon
   return (
     <span
-      className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium ${style.className}`}
+      className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-3xs font-medium ${style.className}`}
     >
       <Icon size={10} />
       {style.label}
@@ -155,8 +172,8 @@ export default function TracesPanel({ traces, loading, isMobile }: TracesPanelPr
                 onClick={() => setShowErrorsOnly(prev => !prev)}
                 className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium transition-colors ${
                   showErrorsOnly
-                    ? "bg-red-100 text-red-700 border border-red-300"
-                    : "bg-gray-100 text-gray-600 hover:bg-gray-200 border border-transparent"
+                    ? "border border-red-300 bg-red-100 text-red-700 dark:border-red-400/30 dark:bg-red-400/15 dark:text-red-300"
+                    : "border border-transparent bg-muted text-muted-foreground hover:bg-accent"
                 }`}
                 aria-pressed={showErrorsOnly}
                 aria-label={`Filter error traces. ${errorCount} errors.`}
@@ -165,8 +182,10 @@ export default function TracesPanel({ traces, loading, isMobile }: TracesPanelPr
                 Errors
                 {errorCount > 0 && (
                   <span
-                    className={`inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-bold ${
-                      showErrorsOnly ? "bg-red-600 text-white" : "bg-gray-300 text-gray-700"
+                    className={`inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full text-3xs font-bold ${
+                      showErrorsOnly
+                        ? "bg-red-700 text-white"
+                        : "bg-muted-foreground/25 text-foreground"
                     }`}
                   >
                     {errorCount}
@@ -177,7 +196,7 @@ export default function TracesPanel({ traces, loading, isMobile }: TracesPanelPr
             {selectedCaseId && (
               <button
                 onClick={handleCloseSession}
-                className="text-xs text-blue-600 hover:text-blue-800 underline"
+                className="text-xs text-link underline hover:opacity-80"
               >
                 ← Back to traces
               </button>
@@ -194,14 +213,14 @@ export default function TracesPanel({ traces, loading, isMobile }: TracesPanelPr
             <TraceStats traces={traces} />
 
             {loading && (
-              <div className="flex items-center justify-center py-8 text-gray-400 text-sm gap-2">
+              <div className="flex items-center justify-center py-8 text-muted-foreground/70 text-sm gap-2">
                 <Loader2 size={16} className="animate-spin" />
                 Loading traces…
               </div>
             )}
 
             {!loading && displayTraces.length === 0 && (
-              <p className="text-gray-400 text-xs text-center py-6">
+              <p className="text-muted-foreground/70 text-xs text-center py-6">
                 {showErrorsOnly
                   ? "No error or cancelled traces in this time range."
                   : "No agent traces in this time range."}
@@ -236,19 +255,22 @@ export default function TracesPanel({ traces, loading, isMobile }: TracesPanelPr
                         <button
                           onClick={() => handleRowClick(trace.trace_id)}
                           className={`flex items-center gap-2 px-3 py-2 text-xs w-full text-left transition-colors ${
-                            isExpanded ? "bg-gray-50" : "hover:bg-gray-50"
+                            isExpanded ? "bg-muted" : "hover:bg-muted"
                           }`}
                           aria-expanded={isExpanded}
                         >
                           {isExpanded ? (
-                            <ChevronDown size={12} className="flex-none text-gray-400" />
+                            <ChevronDown size={12} className="flex-none text-muted-foreground/70" />
                           ) : (
-                            <ChevronRight size={12} className="flex-none text-gray-400" />
+                            <ChevronRight
+                              size={12}
+                              className="flex-none text-muted-foreground/70"
+                            />
                           )}
 
                           <span
                             onClick={e => handleCaseClick(e, trace.case_id)}
-                            className="text-blue-600 hover:text-blue-800 hover:underline cursor-pointer font-mono text-[11px] flex-none"
+                            className="text-link hover:underline cursor-pointer font-mono text-2xs flex-none"
                             role="link"
                             tabIndex={0}
                             onKeyDown={e => {
@@ -261,27 +283,27 @@ export default function TracesPanel({ traces, loading, isMobile }: TracesPanelPr
                             {trace.case_id}
                           </span>
 
-                          <span className="flex items-center gap-1 text-gray-500 flex-none">
-                            <Clock size={10} className="text-gray-400" />
+                          <span className="flex items-center gap-1 text-muted-foreground flex-none">
+                            <Clock size={10} className="text-muted-foreground/70" />
                             {date} {time}
                           </span>
 
                           <TriggerBadge trigger={trace.trigger} />
 
                           <span
-                            className={`text-[10px] font-medium flex-none ${getOutcomeTextClass(trace.outcome)}`}
+                            className={`text-3xs font-medium flex-none ${getOutcomeTextClass(trace.outcome)}`}
                             style={{ color: getOutcomeColor(trace.outcome) }}
                           >
                             {getOutcomeLabel(trace.outcome)}
                           </span>
 
-                          <span className="flex-none text-gray-400 text-[10px] ml-auto">
+                          <span className="flex-none text-muted-foreground/70 text-3xs ml-auto">
                             {trace.segment_count} segment{trace.segment_count !== 1 ? "s" : ""}
                           </span>
                         </button>
 
                         {isExpanded && (
-                          <div className="border-t px-3 py-3 bg-white">
+                          <div className="border-t px-3 py-3 bg-card">
                             <SpanTimeline
                               segments={trace.segments}
                               isError={trace.outcome === "error" || trace.outcome === "cancelled"}

@@ -206,7 +206,8 @@ secret (E2), (2) deploy so AgentCore Identity mints the provider — its respons
 (3) return here and paste that exact `callbackUrl` as a **Web** redirect URI on the outbound app.
 This is a machine/AgentCore redirect — distinct from the SPA's own login redirect (E1) and from
 `MCP_SERVER_APP_CALLBACK_URL` (the USER_FEDERATION `/auth/callback` frontend route, which OBO does
-**not** use). The exact callbackUrl format is **UNVERIFIED** — take it from the deployed provider.
+**not** use). Read the value off the deployed provider —
+`get-oauth2-credential-provider` returns it as a top-level `callbackUrl`.
 
 ---
 
@@ -220,11 +221,20 @@ This is a machine/AgentCore redirect — distinct from the SPA's own login redir
 
 On the external AWS-for-SAP MCP CloudFormation stack, select the **External Identity Provider**
 inbound option = **Microsoft Entra ID**, so the AgentCore Runtime validates the user's Entra JWT
-directly. Inbound discovery URL = `https://login.microsoftonline.com/<tenant>/v2.0/.well-known/openid-configuration`;
-allowed audience = the inbound app (`spa-client-id`, or the app whose id is the token `aud`). The
-runtime validates the inbound JWT against this discovery URL + allowed audiences **before** the OBO
-exchange. Exact inbound CFN parameter names are **UNVERIFIED** — read them off the external stack's
-template.
+directly. The runtime validates the inbound JWT against the discovery URL + allowed audiences
+**before** the OBO exchange. Inbound CFN parameter names:
+
+| Parameter | Value |
+|---|---|
+| `InboundAuthProvider` | `EntraId` |
+| `DiscoveryUrl` | `https://login.microsoftonline.com/<tenant>/v2.0/.well-known/openid-configuration` |
+| `AllowedAudiences` | the **OUTBOUND** exchange app's client id |
+| `AuthFlow` | `ON_BEHALF_OF_TOKEN_EXCHANGE` |
+| `OauthScopes` | `api://<outbound-app-id>/<scope>` |
+
+`AllowedAudiences` is the **outbound** app, not the SPA: the inbound token must already be minted
+*for* the app that performs the exchange, so the SPA requests `api://<outbound-app-id>/<scope>` and
+Entra sets `aud` to the outbound app. Setting the SPA's id here rejects every real token.
 
 ### A2. Set the outbound flow + SAP targets on the external stack
 
@@ -235,15 +245,18 @@ Update Hosting → Advanced Configurations):
 - `MCP_SERVER_SAP_OAUTH_SCOPES=<sap-service-name(s)>` e.g. `ZAPI_SALES_ORDER_SRV_0001` — these are
   **SAP OData service names, NOT OAuth scope URIs**; each must be SICF-activated (S6) and
   PFCG-authorized (S4) for the mapped user or SAP returns **403**.
-- Start read-only (`MCP_SERVER_WRITE_ENABLED=false`); enable writes there when ready.
+- Start read-only (`MCP_SERVER_WRITE_ENABLED=false`). Enabling writes later means a stack update or
+  a second stack — the flags are CFN parameters, and disabled operations simply do not appear in
+  `tools/list`. Our own `cdk/lib/sap-mcp-stack.ts` never creates a runtime, so `make deploy` cannot
+  flip them.
 
 ### A3. Point the runtime at the OBO provider by name
 
 `MCP_SERVER_SAP_OAUTH_PROVIDER=<obo-provider-name>`. The runtime validates this provider exists in
 AgentCore Identity at startup or fails to start.
 
-> **Env-var name:** use `MCP_SERVER_SAP_OAUTH_PROVIDER` (with the `SAP_` infix) — confirm against
-> the external SAP-MCP container's env-var contract.
+> **Env-var name:** use `MCP_SERVER_SAP_OAUTH_PROVIDER` (with the `SAP_` infix). Confirmed live on
+> the deployed container alongside `MCP_SERVER_SAP_OAUTH_FLOW` and `MCP_SERVER_SAP_OAUTH_SCOPES`.
 
 ### A4. Create the AgentCore Identity OBO credential provider (RFC 7523 for Entra)
 
@@ -308,7 +321,8 @@ USER_FEDERATION per the config-reference — the sibling runbook [uf-oidc.md](uf
 
 | Symptom | Likely cause | Fix |
 |---|---|---|
-| **Inbound 401** at the runtime | SPA token `aud` ≠ the runtime's allowed audiences / discovery mismatch, or a raw id_token / Graph-scoped token was sent | SPA must acquire an **access token** scoped to the outbound app's exposed scope (E3/E4); align allowed audiences (A1) |
+| **Inbound 401** at the runtime | No `Authorization` header, or a *claim* check failed: wrong `iss` (token from another IdP/tenant), or expired. The authorizer compares claims **before** verifying the signature, so a 401 means crypto was never reached | Send an **access token** for the right tenant, unexpired; align the discovery URL (A1) |
+| **Inbound 403** at the runtime | Header present but unparseable (empty value, missing `Bearer ` prefix, `alg=none`), **or** `iss`+`aud` matched and signature verification then failed. Also a raw id_token / Graph-scoped token whose `aud` is not the outbound app | SPA must acquire an access token scoped to the outbound app's exposed scope (E3/E4); align allowed audiences (A1) |
 | **Exchange fails** | Entra configured as TOKEN_EXCHANGE/`subject_token` | Use `JWT_AUTHORIZATION_GRANT` (RFC 7523) — A4 |
 | **`AADSTS70011`** | `.default` combined with dynamic delegated scopes in one authorize request | Use `.default` alone, or split requests — E5 |
 | **SAP 401**, issuer/`sub` mismatch | SOIDC issuer/audience trusts the **inbound SPA** client, or maps on Entra's opaque `sub` | Trust the **outbound** app audience (S3); map on `preferred_username`/`email` (S4) |
@@ -319,16 +333,80 @@ USER_FEDERATION per the config-reference — the sibling runbook [uf-oidc.md](uf
 
 ## Open items (carried, not blocking supported-ness)
 
-- **Not run end-to-end** against a production SAP system (whole SAP-MCP integration is
-  reference-design).
+- **Not run against a *production* SAP system.** The full flow — human Entra login → OBO exchange →
+  OData read → SAP-side attribution to the mapped SU01 user — is proven end-to-end on the `SB2` demo
+  system (2026-07-30). One `odata_update` write has been exercised (see below); create, delete and
+  function-import have not. The whole SAP-MCP integration remains reference-design.
+- **Write, exercised once on a dedicated write-enabled MCP (2026-07-30).** Write flags are
+  **deploy-time CFN parameters**, not runtime toggles, so proving the write path needed a second
+  external stack: `aws-for-sap-mcp-server-authverify` (`UniqueId=dzwr01`), Entra-inbound,
+  `AuthFlow=ON_BEHALF_OF_TOKEN_EXCHANGE`, `WRITE`/`UPDATE`/`READ` true and
+  `CREATE`/`DELETE`/`FUNCTION_IMPORT` false. `odata_update` on one free-text PO header field
+  round-tripped `''` → `'GATE4-OBO'` → `''`, each step confirmed by a distinct read-back and by a
+  `PATCH … HTTP 204` in the runtime log, under a human Entra token on the direct-MCP path.
+  A dedicated runtime is **not** an isolated blast radius: it shares the VPC/SG, the SAP
+  credentials secret, the Entra app and the target SAP system with the read-only sibling.
+  Four caveats: the *field* reverted but the PO did not — `LastChangeDateTime` is permanent and
+  `CDHDR`/`CDPOS` change documents almost certainly remain; `MCP_SERVER_WRITE_ENABLED` is a master
+  switch over the per-op flags, not a peer; create/delete disabled is proven at **tool
+  registration** (the container logs `Disabling odata_create tool.` at boot) but never observed as
+  an invocation-time refusal; and the driver is a standalone MCP client, so this evidences the
+  server's flag behaviour, not the agent's write path.
+- **Cedar does not gate writes here — and not because of OBO.** `obo_direct_mcp: true` does mean the
+  agent dials the MCP directly, so the SAP statements in `agentcore/policies/sap_agent_policies.cedar`
+  cannot match: they are keyed on `-sap-mcp-service-target` / `-sap-mcp-user-target`, and the OBO path
+  deploys no Gateway target at all. But the operative reason is broader — the policy engine is not
+  created unless the runtime SDK exposes `create_policy_engine` (`lambdas/policy_engine_cr/index.py`),
+  and `cedar_enforcement_mode` defaults to `LOG_ONLY`, which logs rather than blocks. Check the
+  `PolicyEngineId` and `PolicyEnforcementMode` stack outputs before claiming Cedar gates anything.
+  On `entra-obo`, write gating is the external MCP's deploy-time flags plus SAP-side authorization,
+  with `_assert_direct_topology_bearer` refusing client-credentials tokens in-path.
 - **UNVERIFIED against primary SAP docs:** SOIDC Basis 7.56 SP1+ floor (S1); Feature Pack 2+ for
   the opaque-`sub` custom claim mapping (S4); exact SOIDC field labels (S3); whether a dedicated
   OAuth/OIDC token-endpoint SICF node is required (S6); SAP's JWKS-pull vs cached-keys validation
   model.
-- **UNVERIFIED against AWS/deployed stack:** exact external-stack inbound CFN parameter names (A1);
-  the `SAP_` infix the deployed container reads (A3); the AgentCore callbackUrl format (E6); whether
-  `x-audit-*` baggage survives the container to SAP on the direct path; whether the OBO provider
-  requests/persists `offline_access` for any unattended refresh.
+- **Verified against the deployed stacks (`erp-obo-v1` with `aws-for-sap-mcp-server-uf` read-only,
+  then `aws-for-sap-mcp-server-authverify` write-enabled, 2026-07-30):**
+  inbound CFN parameter names (A1: `InboundAuthProvider=EntraId`, `DiscoveryUrl`, `AllowedAudiences`
+  = the OUTBOUND app, `AuthFlow`, `OauthScopes`); the `SAP_` infix (A3: the container reads
+  `MCP_SERVER_SAP_OAUTH_FLOW` / `MCP_SERVER_SAP_OAUTH_PROVIDER` / `MCP_SERVER_SAP_OAUTH_SCOPES`); the
+  callbackUrl format (E6: `.../identities/oauth2/callback/<guid>`, read off
+  `get-oauth2-credential-provider`). An end-to-end OBO turn read live SAP OData
+  (`API_PURCHASEORDER_PROCESS_SRV`, all HTTP 200, zero 401/403) — the exchanged token is
+  SAP-authorized. SAP genuinely enforces on that endpoint (unauthenticated GET and bogus
+  bearer both return 401 with `www-authenticate: Basic realm="SAP NetWeaver..."`), so the
+  200s required a credential SAP actively accepted, and the external runtime holds no
+  fallback user/password/secret — `ON_BEHALF_OF_TOKEN_EXCHANGE` is the only configured flow.
+- **Do not cite `SAP.Access` scope as an enforced control:** the external MCP logged
+  `Identified 0 accessible services based on OAuth scopes` and then read successfully anyway.
+  SAP-side authorization gated access, not the token's scope grant.
+- **STILL UNVERIFIED against AWS/deployed stack:** whether `x-audit-*` baggage survives the
+  container to SAP — note this is now moot for *identity* purposes, since SAP attributes the call to
+  the mapped SU01 user on its own without any custom header; whether the OBO provider persists
+  `offline_access` for any unattended refresh.
+- **Real-user audit proof (the acceptance test) — CLOSED 2026-07-30.** No AWS-side log records the
+  effective SU01 user, by design, so this can only be proven on the SAP system. **Use `STAD`, not
+  `SM20`.** The Security Audit Log needs the right audit classes armed *before* the call and does not
+  reliably record a successful OIDC-bearer HTTP logon, so `SM20` typically looks empty and proves
+  nothing. `STAD` records every HTTP/ICF request with its authenticated ABAP user, retrospectively,
+  with nothing to enable first.
+
+  How to read it:
+
+  1. `STAD`, start time = the UTC call time, length a few minutes. Check the app server's display
+     offset first: compare a timestamp you generated yourself (e.g. your own `SM21` session) against
+     its STAD row. On `SB2` the display is effectively UTC.
+  2. **Leave the user field blank.** Filtering to the expected user hides the failure case — a token
+     that mapped to a technical user would simply return no rows and look like missing data.
+  3. Look for `SAPMHTTP` rows whose program carries the OData path
+     (`SAPMHTTP /sap/opu/odata/sap/<SERVICE>`). Dialog rows for `SM21`/`RSYSLOG`/`webgui` are your own
+     GUI session, not the agent.
+  4. The `User` column is the answer: the effective SU01 user the OData call executed as.
+
+  Proven on `SB2`/`vsapsb2ci_SB2_00`: nine `SAPMHTTP /sap/opu/odata/...` requests 18:46:40–18:47:24
+  under SU01 user `DANZACH`, matching the AWS-side count and per-second timing, with service users
+  (`AGENTIC`, `DIEGOL`) attributed separately in the same window — so the attribution discriminates
+  between real principals rather than reporting a single default user.
 
 ## References
 

@@ -11,10 +11,13 @@ This guide walks you through deploying the Agentic ERP Automation Quickstart to 
 
 > **Auth-profile scope — Terraform deploys `cognito-basic` only.** Terraform consumes just the
 > inbound axis; the outbound (SAP MCP target), mode (batch runner), and frontend (direct-IdP SPA)
-> axes are CDK-only, with no Terraform module. Any profile past `cognito-basic` — `cognito-m2m`,
-> `entra-obo`, `okta-userfed`, or any Entra/Okta inbound — **loud-fails at `terraform plan`** with a
-> "CDK-only" message (this guard is intentional). If you are testing auth-matrix permutations, use
-> the [CDK backend](DEPLOYMENT.md). See [Auth Profile Selection](../sap/AUTH_PROFILE_SELECTION.md#terraform-scope).
+> axes are CDK-only, with no Terraform module. Every other profile — `cognito-m2m`,
+> `cognito-m2m-batch`, `entra-obo`, `okta-basic`, or any preview profile — **loud-fails at
+> `terraform plan`** with a "CDK-only" message naming the offending axes (this guard is
+> intentional). A `basic` outbound is not sufficient on its own: `okta-basic` fails on its
+> direct-IdP frontend and on omitting `autonomous` from its mode, which Terraform cannot withhold.
+> If you are testing auth-matrix permutations, use the [CDK backend](DEPLOYMENT.md). See
+> [Auth Profile Selection](../sap/AUTH_PROFILE_SELECTION.md#terraform-scope).
 
 ## Prerequisites
 

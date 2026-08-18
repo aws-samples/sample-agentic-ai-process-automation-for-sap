@@ -104,3 +104,23 @@ describe("ToolCallDisplay — auth-required surfacing", () => {
     expect(screen.queryByRole("button", { name: /Sign in to SAP/i })).toBeNull()
   })
 })
+
+describe("ToolCallDisplay recorded failure", () => {
+  it("renders an error status as failed, not as complete", () => {
+    render(<ToolCallDisplay name="odata_update" args="{}" status="error" result="500 boom" />)
+    expect(screen.getByLabelText("Tool call failed")).toBeInTheDocument()
+    expect(screen.queryByLabelText("Tool outcome not confirmed")).not.toBeInTheDocument()
+    expect(screen.queryByLabelText("Tool call succeeded")).not.toBeInTheDocument()
+  })
+
+  it("names the success state for assistive tech", () => {
+    render(<ToolCallDisplay name="odata_read" args="{}" status="complete" result="ok" />)
+    expect(screen.getByLabelText("Tool call succeeded")).toBeInTheDocument()
+  })
+
+  it("keeps the unconfirmed wording for an abandoned call", () => {
+    render(<ToolCallDisplay name="odata_update" args="{}" status="incomplete" />)
+    expect(screen.getByLabelText("Tool outcome not confirmed")).toBeInTheDocument()
+    expect(screen.queryByLabelText("Tool call failed")).not.toBeInTheDocument()
+  })
+})

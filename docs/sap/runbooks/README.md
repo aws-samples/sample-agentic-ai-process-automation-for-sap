@@ -22,9 +22,10 @@ verdict is noted below because it changes how you should read the doc.
 | [uf-oauth2-sap.md](./uf-oauth2-sap.md) | **USER_FEDERATION with SAP as its own OAuth authorization server** | `USER_FEDERATION` (SAP-direct) | **REFUTED** | "SAP-direct, no IdP" is **not** a documented UF topology — documents why, and the two real realizations (SAML-redirect / OIDC). |
 
 **Not (yet) runbooks:** BASIC (service-account) auth is your base SAP system configuration;
-Okta inbound reuses the OIDC USER_FEDERATION (Okta) outbound; the batch / autonomous "Mode 3" flows
-are **planned / not yet built**; frontend SAML/OIDC federation is a **frontend** concern
-(planned / not yet built) whose SAP-side reuses the OIDC and SAML USER_FEDERATION runbooks.
+Okta inbound reuses the OIDC USER_FEDERATION (Okta) outbound; the batch / autonomous flows need no
+SAP-side steps of their own — they reach SAP as the technical user, so the BASIC/M2M configuration
+already covers them; frontend SAML/OIDC federation is a **frontend** concern (planned / not yet
+built) whose SAP-side reuses the OIDC and SAML USER_FEDERATION runbooks.
 
 **Shared background (read first):** your base SAP OData connectivity and service-user setup (the
 SU01 user + PFCG authorizations + SICF activation), the deploy model / env-var contract for the

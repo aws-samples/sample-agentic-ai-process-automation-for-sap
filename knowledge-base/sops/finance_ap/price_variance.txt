@@ -1,0 +1,148 @@
+PRICE VARIANCE — INVOICE EXCEPTION RESOLUTION
+STANDARD OPERATING PROCEDURE (SOP)
+Version 1.0
+
+================================================================================
+PURPOSE
+================================================================================
+
+This SOP defines how the agent resolves a PRICE VARIANCE exception, where the
+supplier invoice unit price differs from the purchase order (PO) unit price in
+SAP S/4HANA. It applies after three-way-match classification has identified the
+exception as a price variance.
+
+The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT",
+"SHOULD", "SHOULD NOT", "RECOMMENDED", "MAY", and "OPTIONAL" in this
+document are to be interpreted as described in RFC 2119.
+
+================================================================================
+SCOPE
+================================================================================
+
+Process Type: price_variance
+SAP Modules:  MM (Materials Management), FI-AP (Accounts Payable)
+SAP Service:  API_SUPPLIERINVOICE_PROCESS_SRV
+Entities:     A_SupplierInvoice, A_PurchaseOrder, A_PurchaseOrderItem
+
+================================================================================
+PRECONDITIONS
+================================================================================
+
+Before execution, the following MUST be true:
+
+1. The SAP MCP Server is reachable for reads and function imports.
+2. The case payload contains the supplier invoice number and fiscal year.
+3. The agent has NO memory of prior runs — each execution is stateless.
+
+================================================================================
+STEP 1: GATHER DATA
+================================================================================
+
+1.1  The agent MUST retrieve the invoice line items (A_SupplierInvoice) with
+     unit price, quantity, and PO reference.
+1.2  The agent MUST retrieve the matching PO item (A_PurchaseOrderItem) with net
+     price and any referenced contract or blanket agreement.
+1.3  The agent MUST NOT fabricate a PO price. IF the PO item cannot be read, the
+     agent MUST try a $filter query before concluding it is unavailable.
+
+================================================================================
+STEP 2: CALCULATE VARIANCE
+================================================================================
+
+2.1  The agent MUST compute the price variance using the calculator tool:
+       price_variance_pct = |invoice_price - po_price| / po_price × 100
+       price_variance_abs = |invoice_price - po_price|
+2.2  Both limits MUST be breached for the variance to be ABOVE tolerance:
+       ABOVE  tolerance = price_variance_pct > {{PRICE_VARIANCE_PCT}}%
+                          AND price_variance_abs > ${{PRICE_VARIANCE_ABS_USD}} per unit
+       WITHIN tolerance = anything else
+     Breaching only one limit is WITHIN tolerance. A cheap part breaching the
+     percentage on pennies, and an expensive part breaching the per-unit dollar
+     figure at a fraction of a percent, are both immaterial; escalating either
+     is noise. Exceeding both is the signal. Clause 3.4 overrides this at the
+     line level.
+
+================================================================================
+STEP 3: APPLY RESOLUTION LOGIC
+================================================================================
+
+3.1  IF the variance is WITHIN tolerance:
+     - The agent MUST auto-accept and proceed to post the invoice (STEP 4).
+
+3.2  IF the variance is ABOVE tolerance AND the PO references a contract or
+     blanket agreement:
+     - The agent MUST send an email to {{CONTACT_PROCUREMENT}} asking which
+       contract terms or pricing tier applies. Include PO#, invoice#, PO price,
+       invoice price, and the contract/agreement reference.
+     - The agent MUST update case state to "awaiting_human_input" and STOP.
+     - When procurement responds, the agent MUST use the clarified pricing to
+       re-evaluate the variance.
+
+3.3  IF the variance is ABOVE tolerance AND no contract is referenced:
+     - The agent MUST send an approval request to {{CONTACT_PROCUREMENT}} with
+       PO#, invoice#, and the price difference.
+     - The agent MUST update case state to "awaiting_human_input" and STOP.
+     - IF approved or the PO is amended → proceed to post (STEP 4).
+     - IF denied → the agent MUST mark the case for manual review by
+       {{CONTACT_AP_TEAM}}.
+
+3.4  IF the total invoice-vs-PO amount difference for the line exceeds
+     ${{LINE_AMOUNT_TOLERANCE_USD}}, the agent MUST treat the item as ABOVE tolerance
+     regardless of the per-unit percentage.
+
+================================================================================
+STEP 4: EXECUTE RESOLUTION
+================================================================================
+
+4.1  The agent MUST NOT attempt to park the invoice — the service exposes no
+     Park function import. Once any required approval is confirmed, the agent
+     MUST clear a blocked invoice with the Release function import, or post an
+     invoice parked upstream with the Post function import.
+4.2  The agent MUST update case state after each SAP write.
+4.3  IF a write fails, the agent MUST set the case to 'error', notify
+     {{CONTACT_AP_TEAM}} with the error, and STOP.
+
+================================================================================
+STEP 5: CLOSE CASE
+================================================================================
+
+5.1  The agent MUST update case status to 'complete' once the invoice is posted.
+5.2  The agent SHOULD send a summary to {{CONTACT_AP_TEAM}}.
+
+================================================================================
+ESCALATION RULES
+================================================================================
+
+| Trigger                                   | Action                              |
+|-------------------------------------------|-------------------------------------|
+| Variance above tolerance, contract present| Query {{CONTACT_PROCUREMENT}}       |
+| Variance above tolerance, no contract     | Approval from {{CONTACT_PROCUREMENT}}|
+| Approval denied                           | Manual review by {{CONTACT_AP_TEAM}}|
+| High-value dispute                        | {{CONTACT_FINANCE_APPROVALS}}       |
+
+================================================================================
+CONTACTS
+================================================================================
+
+- Procurement:       {{CONTACT_PROCUREMENT}}
+- AP Team:           {{CONTACT_AP_TEAM}}
+- Finance Approvals: {{CONTACT_FINANCE_APPROVALS}}
+
+================================================================================
+TOLERANCES (CONFIGURABLE — DECLARED IN skills/finance_ap/config.json)
+================================================================================
+
+| Parameter                       | Symbol                        |
+|---------------------------------|-------------------------------|
+| Price variance — percentage     | {{PRICE_VARIANCE_PCT}}        |
+| Price variance — absolute (USD) | {{PRICE_VARIANCE_ABS_USD}}    |
+| Amount tolerance per line (USD) | {{LINE_AMOUNT_TOLERANCE_USD}} |
+
+================================================================================
+REVISION HISTORY
+================================================================================
+
+| Version | Date       | Author | Changes                              |
+|---------|------------|--------|--------------------------------------|
+| 1.0     | 2026-07-21 | Kiro   | Initial focused SOP split from       |
+|         |            |        | invoice_matching v1.0                |

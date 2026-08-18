@@ -1,13 +1,12 @@
 // Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
-"use client"
-
 import { useState } from "react"
 import { ThumbsUp, ThumbsDown, Copy, Check } from "lucide-react"
 import { Message } from "./types"
+import { TONE_TEXT } from "@/lib/statusTone"
 import { FeedbackDialog } from "./FeedbackDialog"
-import { getToolRenderer } from "@/hooks/useToolRenderer"
+import { ToolCallDisplay } from "./ToolCallDisplay"
 import { MarkdownRenderer } from "./MarkdownRenderer"
 import { AgentAlert } from "./AgentAlert"
 
@@ -78,16 +77,14 @@ export function ChatMessage({
           }
           return <MarkdownRenderer key={i} content={seg.content} />
         }
-        const render = getToolRenderer(seg.toolCall.name)
-        if (!render) return null
         return (
           <div key={seg.toolCall.toolUseId} className="my-1">
-            {render({
-              name: seg.toolCall.name,
-              args: seg.toolCall.input,
-              status: seg.toolCall.status,
-              result: seg.toolCall.result,
-            })}
+            <ToolCallDisplay
+              name={seg.toolCall.name}
+              args={seg.toolCall.input}
+              status={seg.toolCall.status}
+              result={seg.toolCall.result}
+            />
           </div>
         )
       })
@@ -125,12 +122,12 @@ export function ChatMessage({
               aria-label="Copy message"
               title="Copy to clipboard"
             >
-              {copied ? <Check size={14} className="text-green-600" /> : <Copy size={14} />}
+              {copied ? <Check size={14} className={TONE_TEXT.success} /> : <Copy size={14} />}
             </button>
             <button
               onClick={() => handleFeedbackClick("positive")}
               disabled={feedbackSubmitted}
-              className="p-1 text-muted-foreground hover:text-green-600 hover:bg-green-50 rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="p-1 text-muted-foreground hover:text-foreground hover:bg-accent rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               aria-label="Positive feedback"
               title="Good response"
             >
@@ -139,7 +136,7 @@ export function ChatMessage({
             <button
               onClick={() => handleFeedbackClick("negative")}
               disabled={feedbackSubmitted}
-              className="p-1 text-muted-foreground hover:text-red-600 hover:bg-red-50 rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="p-1 text-muted-foreground hover:text-foreground hover:bg-accent rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               aria-label="Negative feedback"
               title="Bad response"
             >

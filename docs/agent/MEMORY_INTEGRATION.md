@@ -257,8 +257,7 @@ checkpointer = AgentCoreMemorySaver(
 
 # Create Bedrock model
 bedrock_model = ChatBedrock(
-    model_id="us.anthropic.claude-sonnet-4-5-20250929-v1:0",
-    temperature=0.1,
+    model_id="us.anthropic.claude-sonnet-5",
     streaming=True
 )
 

@@ -8,54 +8,77 @@ SPDX-License-Identifier: Apache-2.0
 -->
 # Deployment Quick Reference
 
+Two entry points, with distinct jobs:
+
+- **`python3 launch.py`** — deploy and operate the sample. Standard library only, so it runs on a clean clone before anything is installed.
+- **`make`** — contributor tooling: lint, tests, type generation, packaging. Its deploy and operate targets delegate to the launcher, so they are aliases and never a second implementation.
+
 ## First-Time Deploy
 
 ```bash
-make setup
+python3 launch.py doctor                      # check prerequisites and AWS access; changes nothing
+python3 launch.py                             # guided launch
 ```
 
-This walks you through: bootstrap (prereqs → config → CDK deploy → frontend) → SAP credentials → knowledge base sync → sample data (optional).
+The guided flow is: environment check → config → confirm the target account/Region → CDK deploy → Lambda refresh → frontend → optional SAP credentials → optional knowledge base. Nothing is written to AWS before the confirmation, which defaults to no.
 
 Or run each step individually:
 
 ```bash
-cp cdk/config.yaml.example cdk/config.yaml   # edit: stack_name_base, admin_user_email
-python scripts/setup.py                       # guided: prereqs → config → cdk deploy → frontend
-make sync-sap-secret                          # sync SAP credentials to Secrets Manager
-make sync-kb                                  # sync SOPs + API docs to S3
+python3 launch.py configure                   # generate cdk/config.yaml
+python3 launch.py infra                       # CDK bootstrap + deploy
+python3 launch.py frontend                    # build and deploy the frontend
+python3 launch.py sync-sap                    # sync SAP credentials to Secrets Manager
+python3 launch.py sync-kb                     # publish SOPs + API docs, start ingestion
 ```
 
 ## Redeploy After Code Changes
 
 ```bash
-make deploy-all
+python3 launch.py deploy                      # add --yes for unattended runs
 ```
 
-This runs CDK deploy, refreshes all Lambdas (so they pick up new SSM values), and redeploys the frontend.
+This deploys the CDK stacks, refreshes all Lambdas (so they pick up new SSM values), and redeploys the frontend. It confirms the target account and Region first.
+
+## Status and Recovery
+
+```bash
+python3 launch.py status                      # deployed stacks, endpoints, failure causes
+python3 launch.py resume                      # continue an interrupted launch
+python3 launch.py diff                        # pending CDK changes, including IAM
+```
+
+`resume` re-queries CloudFormation before skipping anything, so a stale `.launcher/state.json` cannot cause a wrong skip.
 
 ## Credential Rotation
 
 ```bash
-make sync-sap-secret                          # re-prompts for username/password
+python3 launch.py sync-sap --force            # re-prompts for username/password
+python3 launch.py sync-channel --force        # webhook signing secret
 ```
+
+Passwords are read without echo and never reach a config file, the state file, a log, or a process argument list.
 
 ## Autonomy Controls (no redeploy needed)
 
 ```bash
-make autonomy                                          # show current
-make autonomy CMD="set trigger-mode auto"              # auto | manual
-make autonomy CMD="set action-mode full-auto"          # full-auto | supervised | read-only
+python3 launch.py autonomy                    # show current
+python3 launch.py autonomy set auto           # auto | manual
 ```
+
+`trigger-mode` is the only runtime toggle — it gates poller auto-enqueue, not SAP writes.
 
 ## Knowledge Base Updates
 
 After editing files in `knowledge-base/sops/` or `knowledge-base/sap-api-docs/`:
 
 ```bash
-make sync-kb                                  # sync all
-./scripts/sync-knowledge-base.sh --sops-only  # SOPs only
-./scripts/sync-knowledge-base.sh --docs-only  # API docs only
+python3 launch.py sync-kb                     # both corpora
+python3 launch.py sync-kb --only sops         # SOPs only
+python3 launch.py sync-kb --only api-docs     # API docs only
 ```
+
+The sync shows exactly which bucket objects have no local counterpart and requires a separate confirmation before deleting them. `--yes` cannot satisfy that confirmation.
 
 ## Local Frontend Dev
 
@@ -64,9 +87,10 @@ make local-config                             # pull Cognito/backend values
 cd frontend && npm install && npm run dev
 ```
 
-## Available Make Targets
+## Command Reference
 
-Run `make` to see all available targets grouped by category (Getting Started, Operations, Development, Code Quality).
+- `python3 launch.py --help` — every deploy and operate command
+- `make` — every contributor target, grouped by category
 
 ## Key Config Values (cdk/config.yaml)
 
@@ -74,6 +98,6 @@ Run `make` to see all available targets grouped by category (Getting Started, Op
 |---------|-----------------|
 | `stack_name_base` | Names all AWS resources, SSM paths, secrets |
 | `sap.base_url` | SAP OData endpoint URL (poller service-account target) |
-| `notification.channel` | `ses` / `slack` / `jira` / `servicenow` |
+| `notification.channel` | `ses` / `jira` / `servicenow` |
 | `cedar_enforcement_mode` | `LOG_ONLY` / `ENFORCE` |
 | `demo.enabled` | Opt-in test infrastructure (DDB tables, seeder, test data) |

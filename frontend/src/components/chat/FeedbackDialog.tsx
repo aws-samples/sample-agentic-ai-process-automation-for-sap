@@ -1,8 +1,6 @@
 // Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
-"use client"
-
 import { useState } from "react"
 import {
   Dialog,
@@ -13,6 +11,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
+import { TONE_TEXT } from "@/lib/statusTone"
 
 interface FeedbackDialogProps {
   isOpen: boolean
@@ -24,15 +23,17 @@ interface FeedbackDialogProps {
 export function FeedbackDialog({ isOpen, onClose, onSubmit, feedbackType }: FeedbackDialogProps) {
   const [comment, setComment] = useState("")
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
   const handleSubmit = async () => {
     setIsSubmitting(true)
+    setError(null)
     try {
       await onSubmit(comment)
       setComment("")
       onClose()
-    } catch (error) {
-      console.error("Error submitting feedback:", error)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to submit feedback. Please try again.")
     } finally {
       setIsSubmitting(false)
     }
@@ -40,6 +41,7 @@ export function FeedbackDialog({ isOpen, onClose, onSubmit, feedbackType }: Feed
 
   const handleCancel = () => {
     setComment("")
+    setError(null)
     onClose()
   }
 
@@ -64,13 +66,19 @@ export function FeedbackDialog({ isOpen, onClose, onSubmit, feedbackType }: Feed
             id="feedback-comment"
             value={comment}
             onChange={e => setComment(e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+            className="w-full px-3 py-2 border border-input rounded-md focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent resize-none"
             rows={4}
             placeholder="Share your thoughts..."
             maxLength={5000}
           />
-          <div className="text-xs text-gray-500 text-right">{comment.length} / 5000</div>
+          <div className="text-xs text-muted-foreground text-right">{comment.length} / 5000</div>
         </div>
+
+        {error && (
+          <p role="alert" className={`text-sm ${TONE_TEXT.danger}`}>
+            {error}
+          </p>
+        )}
 
         <DialogFooter>
           <Button type="button" variant="outline" onClick={handleCancel} disabled={isSubmitting}>

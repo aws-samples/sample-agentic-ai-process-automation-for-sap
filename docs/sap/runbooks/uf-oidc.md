@@ -5,16 +5,17 @@ SPDX-License-Identifier: Apache-2.0
 
 # USER_FEDERATION (OIDC) — Operator Runbook (User Federation, external OIDC IdP; Entra or Okta)
 
-> **PREVIEW — not yet deployable.** The USER_FEDERATION outbound flow is a preview design: the
-> topology is modeled and validated, but its IaC module is not built yet. Reference design for the
-> roadmap, not a ready-to-run procedure.
+> **PREVIEW — not yet deployable.** The USER_FEDERATION outbound is `status: stub,
+> blocked_by: upstream` in `auth-profiles.yaml` — the repository wiring exists and has been
+> exercised, but end-to-end verification is blocked by an unresolved defect in AgentCore Identity's
+> 3LO token vault. Reference design for the roadmap, not a ready-to-run procedure.
 
 > **STATUS.** USER_FEDERATION (OIDC) with Entra or Okta is the **base interactive per-user**
 > USER_FEDERATION case, and the one UF variant **unambiguously supported** by the AWS-for-SAP MCP
 > scenario table: *"External IdP with OIDC | User Federation | OIDC | Entra ID | SAP OIDC trust"*
 > ([identity-and-authentication](https://docs.aws.amazon.com/mcp-sap/latest/awsforsapmcp/identity-and-authentication.html)).
 > The human does a 3-legged OIDC login at Entra/Okta; SAP validates the resulting OIDC token via a
-> **SOIDC** trust and runs OData as that human. But this flow is **preview / not built** and has **not
+> **SOIDC** trust and runs OData as that human. But this flow is **preview** and has **not
 > been run end-to-end here** — reference design pending your own validation. SAP-side facts that could
 > not be re-confirmed against a rendered primary SAP doc (help.sap.com is client-side-rendered) are
 > marked **UNVERIFIED**.
@@ -296,9 +297,9 @@ SAP-as-authz-server UF variants.
 
 ## Open items (carried, not blocking — reference design)
 
-- **Not built / not run end-to-end.** This flow is preview and not built; no live OIDC SSO or
-  real-user SAP audit proof exists here (S5 acceptance test). The whole SAP-MCP integration is
-  reference design.
+- **Not run end-to-end.** This flow is preview: no live OIDC SSO or real-user SAP audit proof exists
+  here (S5 acceptance test). The blocker is upstream (the AgentCore 3LO token vault), not missing
+  wiring. The whole SAP-MCP integration is reference design.
 - **UNVERIFIED against primary SAP docs:** SOIDC Basis 7.56 SP1+ floor; Feature Pack 2+ for the Entra
   opaque-`sub` custom claim mapping (S3); exact SOIDC field labels (S2). All inherited from
   [soidc-entra-obo.md](./soidc-entra-obo.md) (same SOIDC trust) — confirm on your release.

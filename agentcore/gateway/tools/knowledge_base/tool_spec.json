@@ -14,6 +14,20 @@
     }
   },
   {
+    "name": "load_sop",
+    "description": "Load the complete focused SOP for a known exception type, verbatim and with tolerances and contacts resolved. Use this instead of search_sap_sops once the exception type is classified — search returns fragments, this returns the whole procedure.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "process_type": {
+          "type": "string",
+          "description": "The classified exception type, e.g. price_variance, quantity_variance, uom_mismatch, missing_goods_receipt, missing_purchase_order, duplicate_invoice"
+        }
+      },
+      "required": ["process_type"]
+    }
+  },
+  {
     "name": "search_sap_api_docs",
     "description": "Search the SAP API Documentation Knowledge Base for OData API specifications, endpoints, field descriptions, and example calls.",
     "inputSchema": {

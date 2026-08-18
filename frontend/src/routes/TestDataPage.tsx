@@ -1,8 +1,6 @@
 // Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
-"use client"
-
 import { useState } from "react"
 import { useAuth } from "react-oidc-context"
 import { Button } from "@/components/ui/button"
@@ -15,15 +13,27 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import { StatusBadge } from "@/components/ui/status-badge"
+import { Banner, EmptyState, PageBody, PageHeader } from "@/components/ui/page-chrome"
+import { TONE_TEXT, type StatusTone } from "@/lib/statusTone"
+import { formatAmount } from "@/lib/domainFields"
 import {
   createApTestCase,
   type CreateApTestCasePayload,
   type CreateApTestCaseResult,
 } from "@/services/testDataService"
 
-function currency(n?: number | null) {
-  if (n == null) return "—"
-  return `$${n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+/**
+ * A variance is only ever three states, and over-invoiced is the one that blocks
+ * payment — so it reads as danger while under-invoiced is merely worth noticing.
+ */
+export function varianceMeta(
+  variance: number,
+  labels: { match: string; over: string; under: string }
+): { label: string; tone: StatusTone } {
+  if (variance === 0) return { label: labels.match, tone: "success" }
+  if (variance > 0) return { label: labels.over, tone: "danger" }
+  return { label: labels.under, tone: "progress" }
 }
 
 interface ApPreset {
@@ -160,19 +170,16 @@ export default function TestDataPage() {
   }
 
   return (
-    <div className="flex flex-col h-full">
-      <div className="flex-none border-b px-6 py-4">
-        <h1 className="text-xl font-semibold">Test Data — AP Invoice Matching</h1>
-        <p className="text-xs text-gray-500">
-          Create three-way-match exception scenarios in SAP for testing the agent. Cases appear in
-          the Cases dashboard after the next poller cycle (~5 min).
-        </p>
-      </div>
+    <>
+      <PageHeader
+        title="Test Data — AP Invoice Matching"
+        description="Create three-way-match exception scenarios in SAP for testing the agent. Cases appear in the Cases dashboard after the next poller cycle (~5 min)."
+      />
 
       <div className="grow flex overflow-hidden">
-        <div className="w-1/2 border-r overflow-auto p-6 space-y-5">
+        <PageBody className="w-1/2 border-r space-y-5">
           <div>
-            <label className="text-sm font-medium text-gray-700 mb-2 block">Quick Presets</label>
+            <label className="text-sm font-medium text-foreground mb-2 block">Quick Presets</label>
             <Select onValueChange={v => applyApPreset(AP_PRESETS[parseInt(v)])}>
               <SelectTrigger className="w-full">
                 <SelectValue placeholder="Select an AP scenario…" />
@@ -189,7 +196,7 @@ export default function TestDataPage() {
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="text-sm font-medium text-gray-700 mb-1 block">
+              <label className="text-sm font-medium text-foreground mb-1 block">
                 PO Amount (USD)
               </label>
               <Input
@@ -200,7 +207,7 @@ export default function TestDataPage() {
               />
             </div>
             <div>
-              <label className="text-sm font-medium text-gray-700 mb-1 block">
+              <label className="text-sm font-medium text-foreground mb-1 block">
                 Invoice Amount (USD)
               </label>
               <Input
@@ -212,33 +219,33 @@ export default function TestDataPage() {
             </div>
           </div>
 
-          <div className="flex items-center gap-3 p-3 rounded-md border bg-gray-50">
+          <div className="flex items-center gap-3 p-3 rounded-md border bg-muted">
             <input
               id="skip-gr"
               type="checkbox"
               checked={apSkipGr}
               onChange={e => setApSkipGr(e.target.checked)}
-              className="h-4 w-4 rounded border-gray-300"
+              className="h-4 w-4 rounded border-input"
             />
-            <label htmlFor="skip-gr" className="text-sm text-gray-700">
+            <label htmlFor="skip-gr" className="text-sm text-foreground">
               <span className="font-medium">Skip Goods Receipt</span>
-              <span className="text-gray-500 ml-1">— creates a "missing GR" scenario</span>
+              <span className="text-muted-foreground ml-1">— creates a "missing GR" scenario</span>
             </label>
           </div>
 
           <div className="grid grid-cols-3 gap-4">
             <div>
-              <label className="text-sm font-medium text-gray-700 mb-1 block">PO Qty</label>
+              <label className="text-sm font-medium text-foreground mb-1 block">PO Qty</label>
               <Input
                 type="number"
                 min={1}
                 value={apPoQuantity}
                 onChange={e => setApPoQuantity(Number(e.target.value) || 1)}
               />
-              <p className="text-xs text-gray-400 mt-0.5">Ordered</p>
+              <p className="text-xs text-muted-foreground/70 mt-0.5">Ordered</p>
             </div>
             <div>
-              <label className="text-sm font-medium text-gray-700 mb-1 block">GR Qty</label>
+              <label className="text-sm font-medium text-foreground mb-1 block">GR Qty</label>
               <Input
                 type="number"
                 min={0}
@@ -246,23 +253,27 @@ export default function TestDataPage() {
                 disabled={apSkipGr}
                 onChange={e => setApGrQuantity(Number(e.target.value) || 0)}
               />
-              <p className="text-xs text-gray-400 mt-0.5">{apSkipGr ? "No GR" : "Received"}</p>
+              <p className="text-xs text-muted-foreground/70 mt-0.5">
+                {apSkipGr ? "No GR" : "Received"}
+              </p>
             </div>
             <div>
-              <label className="text-sm font-medium text-gray-700 mb-1 block">Invoice Qty</label>
+              <label className="text-sm font-medium text-foreground mb-1 block">Invoice Qty</label>
               <Input
                 type="number"
                 min={1}
                 value={apInvoiceQuantity}
                 onChange={e => setApInvoiceQuantity(Number(e.target.value) || 1)}
               />
-              <p className="text-xs text-gray-400 mt-0.5">Invoiced</p>
+              <p className="text-xs text-muted-foreground/70 mt-0.5">Invoiced</p>
             </div>
           </div>
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="text-sm font-medium text-gray-700 mb-1 block">Payment Block</label>
+              <label className="text-sm font-medium text-foreground mb-1 block">
+                Payment Block
+              </label>
               <Select value={apPaymentBlock} onValueChange={setApPaymentBlock}>
                 <SelectTrigger className="w-full">
                   <SelectValue />
@@ -277,7 +288,9 @@ export default function TestDataPage() {
               </Select>
             </div>
             <div>
-              <label className="text-sm font-medium text-gray-700 mb-1 block">Scenario Name</label>
+              <label className="text-sm font-medium text-foreground mb-1 block">
+                Scenario Name
+              </label>
               <Input
                 placeholder="Optional label"
                 value={apScenarioName}
@@ -286,61 +299,47 @@ export default function TestDataPage() {
             </div>
           </div>
 
-          <Card className="p-4 bg-gray-50">
+          <Card className="p-4 bg-muted">
             <div className="flex items-center gap-2 mb-2">
-              <span className="text-sm font-medium text-gray-700">Three-Way Match Preview:</span>
+              <span className="text-sm font-medium text-foreground">Three-Way Match Preview:</span>
             </div>
             <div className="flex flex-wrap gap-2 mb-3">
-              <span
-                className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${
-                  apVariance === 0
-                    ? "bg-green-100 text-green-800"
-                    : apVariance > 0
-                      ? "bg-red-100 text-red-800"
-                      : "bg-yellow-100 text-yellow-800"
-                }`}
-              >
-                {apVariance === 0
-                  ? "✓ Price match"
-                  : apVariance > 0
-                    ? `▲ Over-invoiced ${apVariancePct}%`
-                    : `▼ Under-invoiced ${apVariancePct}%`}
-              </span>
+              {/* Glyphs dropped with the shared badge: the wording already carries
+                  direction, and a screen reader announces "▲" as "up-pointing triangle". */}
+              <StatusBadge
+                {...varianceMeta(apVariance, {
+                  match: "Price match",
+                  over: `Over-invoiced ${apVariancePct}%`,
+                  under: `Under-invoiced ${apVariancePct}%`,
+                })}
+              />
               {apSkipGr ? (
-                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-orange-100 text-orange-800">
-                  ⚠ Missing GR
-                </span>
+                <StatusBadge label="Missing GR" tone="attention" />
               ) : (
-                <span
-                  className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${
-                    apQtyVariance === 0
-                      ? "bg-green-100 text-green-800"
-                      : apQtyVariance > 0
-                        ? "bg-red-100 text-red-800"
-                        : "bg-yellow-100 text-yellow-800"
-                  }`}
-                >
-                  {apQtyVariance === 0
-                    ? "✓ Qty match"
-                    : apQtyVariance > 0
-                      ? `▲ Qty +${apQtyVariance}`
-                      : `▼ Qty ${apQtyVariance}`}
-                </span>
+                <StatusBadge
+                  {...varianceMeta(apQtyVariance, {
+                    match: "Qty match",
+                    over: `Qty over by ${apQtyVariance}`,
+                    under: `Qty short by ${Math.abs(apQtyVariance)}`,
+                  })}
+                />
               )}
             </div>
-            <div className="grid grid-cols-3 gap-2 text-sm text-gray-600">
-              <div>PO: {currency(apPoAmount)}</div>
-              <div>Invoice: {currency(apInvoiceAmount)}</div>
-              <div>Variance: {currency(apVariance)}</div>
+            {/* Amounts sit in a fixed grid and change as the operator types, so the
+                columns are tabular — proportional digits reflow the whole row. */}
+            <div className="grid grid-cols-3 gap-2 text-sm tabular-nums text-muted-foreground">
+              <div>PO: {formatAmount(apPoAmount)}</div>
+              <div>Invoice: {formatAmount(apInvoiceAmount)}</div>
+              <div>Variance: {formatAmount(apVariance)}</div>
             </div>
             {!apSkipGr && (
-              <div className="grid grid-cols-3 gap-2 text-sm text-gray-600 mt-1">
+              <div className="grid grid-cols-3 gap-2 text-sm tabular-nums text-muted-foreground mt-1">
                 <div>PO Qty: {apPoQuantity}</div>
                 <div>GR Qty: {apGrQuantity}</div>
                 <div>Inv Qty: {apInvoiceQuantity}</div>
               </div>
             )}
-            <p className="text-xs text-gray-500 mt-2">
+            <p className="text-xs text-muted-foreground mt-2">
               {apSkipGr
                 ? "Agent will detect missing GR, check delivery tracking, and escalate to warehouse/receiving per SOP."
                 : "Agent will retrieve PO, compare invoice vs GR, and route for approval or rejection based on variance tolerance."}
@@ -360,52 +359,46 @@ export default function TestDataPage() {
             {apCreating ? "Creating in SAP…" : "Create AP Test Case in SAP"}
           </Button>
           {!apSkipGr && apGrQuantity > apPoQuantity && (
-            <div className="bg-yellow-50 border-l-4 border-yellow-400 p-3">
-              <p className="text-sm text-yellow-700">
-                GR quantity cannot exceed PO quantity — SAP will reject the goods receipt.
-              </p>
-            </div>
+            <Banner tone="progress">
+              GR quantity cannot exceed PO quantity — SAP will reject the goods receipt.
+            </Banner>
           )}
-          {apError && (
-            <div className="bg-red-50 border-l-4 border-red-500 p-3">
-              <p className="text-sm text-red-700">{apError}</p>
-            </div>
-          )}
-        </div>
+          {apError && <Banner tone="danger">{apError}</Banner>}
+        </PageBody>
 
-        <div className="w-1/2 overflow-auto p-6">
-          <h2 className="text-sm font-medium text-gray-700 mb-3">
+        <PageBody className="w-1/2">
+          <h2 className="text-sm font-medium text-foreground mb-3">
             Created This Session ({apResults.length})
           </h2>
           {apResults.length === 0 ? (
-            <p className="text-gray-400 text-center mt-12">
-              No AP test cases created yet. Use the form to create blocked invoices in SAP. The
-              poller will pick them up as AP exceptions.
-            </p>
+            <EmptyState
+              message="No AP test cases created yet."
+              hint="Use the form to create blocked invoices in SAP. The poller picks them up as AP exceptions."
+            />
           ) : (
             <div className="space-y-2">
               {apResults.map((r, i) => (
                 <Card key={i} className="p-3">
                   <div className="flex items-center justify-between mb-1">
                     <span className="font-mono text-sm font-medium">{r.po_number ?? "FAILED"}</span>
-                    <span
-                      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${
-                        r.variance === 0 ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"
-                      }`}
-                    >
-                      Block: {r.payment_block}{" "}
-                      {r.variance !== 0 && `· ${currency(r.variance)} variance`}
-                    </span>
+                    <StatusBadge
+                      label={
+                        r.variance === 0
+                          ? `Block: ${r.payment_block}`
+                          : `Block: ${r.payment_block} · ${formatAmount(r.variance)} variance`
+                      }
+                      tone={r.variance === 0 ? "success" : "danger"}
+                    />
                   </div>
-                  <div className="grid grid-cols-2 gap-x-4 gap-y-0.5 text-xs text-gray-500">
-                    <span>PO: {currency(r.po_amount)}</span>
-                    <span>Invoice: {currency(r.invoice_amount)}</span>
+                  <div className="grid grid-cols-2 gap-x-4 gap-y-0.5 text-xs tabular-nums text-muted-foreground">
+                    <span>PO: {formatAmount(r.po_amount)}</span>
+                    <span>Invoice: {formatAmount(r.invoice_amount)}</span>
                     <span>
                       {r.invoice_number
                         ? `Invoice #: ${r.invoice_number}`
                         : "Invoice creation failed"}
                     </span>
-                    <span>Price Δ: {currency(r.variance)}</span>
+                    <span>Price Δ: {formatAmount(r.variance)}</span>
                     <span>
                       {r.skip_gr
                         ? "GR: skipped (missing)"
@@ -422,17 +415,21 @@ export default function TestDataPage() {
                     </span>
                   </div>
                   {r.scenario_name && (
-                    <p className="text-xs text-gray-400 mt-1 truncate">{r.scenario_name}</p>
+                    <p className="text-xs text-muted-foreground/70 mt-1 truncate">
+                      {r.scenario_name}
+                    </p>
                   )}
                   {(r.invoice_error || r.gr_error) && (
-                    <p className="text-xs text-red-400 mt-1">{r.invoice_error || r.gr_error}</p>
+                    <p className={`mt-1 text-xs ${TONE_TEXT.danger}`}>
+                      {r.invoice_error || r.gr_error}
+                    </p>
                   )}
                 </Card>
               ))}
             </div>
           )}
-        </div>
+        </PageBody>
       </div>
-    </div>
+    </>
   )
 }

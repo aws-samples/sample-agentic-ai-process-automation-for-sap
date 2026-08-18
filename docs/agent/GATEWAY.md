@@ -11,7 +11,7 @@ This document describes how this project implements AgentCore Gateway with Lambd
 
 This project uses **AgentCore Gateway with Lambda Targets** to enable agents to access external tools and services. This architecture provides a clean separation between agent logic and tool implementation, allowing for independent scaling and deployment of individual tools.
 
-The live Gateway Lambda tools are defined in `agentcore/gateway/tools/`: `case_management` (`get_case_state` / `update_case_state`), `notification` (`send_notification`), `knowledge_base` (`search_sap_api_docs` / `search_sap_sops`), and `demo_ticket_management` (`demo_*`).
+The live Gateway Lambda tools are defined in `agentcore/gateway/tools/`: `case_management` (`get_case_state` / `update_case_state`), `notification` (`send_notification`), `knowledge_base` (`search_sap_api_docs` / `search_sap_sops` / `load_sop`), `demo_ticket_management` (`demo_*`), and `agent_knowledge` (`get_precedent` / `check_vendor_risk`) — the last gated on `agent_knowledge.enabled`, so it is neither built nor registered unless that config is set.
 
 > **SAP OData access is not a Gateway Lambda tool.** SAP reads and writes are served exclusively by the external AWS for SAP MCP server target (not a Lambda tool and not an SQS write path). See [ADR-012](../design-decisions/012-sap-mcp-server-integration.md).
 
@@ -248,7 +248,7 @@ Gateway configuration is stored in SSM for easy access:
 Use the provided test script to verify gateway functionality:
 
 ```bash
-python3 scripts/test-gateway.py
+python3 test-scripts/test-gateway.py
 ```
 
 This script:

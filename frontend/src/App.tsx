@@ -1,25 +1,28 @@
 // Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
-import { BrowserRouter } from "react-router-dom"
+import { BrowserRouter } from "react-router"
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import { AuthProvider } from "@/components/auth/AuthProvider"
-import { GlobalContextProvider } from "@/app/context/GlobalContext"
-import { NavBar } from "@/components/NavBar"
 import AppRoutes from "./routes"
+
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 10_000,
+      refetchOnWindowFocus: false,
+    },
+  },
+})
 
 export default function App() {
   return (
-    <BrowserRouter>
-      <AuthProvider>
-        <GlobalContextProvider>
-          <div className="flex flex-col h-screen">
-            <NavBar />
-            <div className="flex-1 overflow-hidden">
-              <AppRoutes />
-            </div>
-          </div>
-        </GlobalContextProvider>
-      </AuthProvider>
-    </BrowserRouter>
+    <QueryClientProvider client={queryClient}>
+      <BrowserRouter>
+        <AuthProvider>
+          <AppRoutes />
+        </AuthProvider>
+      </BrowserRouter>
+    </QueryClientProvider>
   )
 }

@@ -20,17 +20,18 @@ The agent is event-driven: EventBridge scheduler → OData poller → SQS FIFO �
 
 ## Key Concepts
 
-**Skills** — Domain expertise loaded dynamically based on `process_type`. Each skill has a `config.json` (process types, tools, model tier) and `base_prompt.txt` with `{SOP_CONTENT}` placeholder. Located in `skills/<domain>/`. Auto-discovered by `agent/utils/skill_router.py`.
+**Skills** — Domain expertise loaded dynamically based on `process_type`. Each skill has a `config.json` (process types, tools, model tier) and a domain-only `base_prompt.txt` with `{PLATFORM_MECHANICS}` and `{SOP_CONTENT}` placeholders. Located in `skills/<domain>/`. Auto-discovered by `agent/utils/skill_router.py`. Platform mechanics (tool names, OData query scoping, write semantics, ticket protocol) live once in `skills/_platform_prompt.txt` and are injected into every skill.
 
 **SOPs** — Standard Operating Procedures stored in S3, injected into the system prompt at runtime. Located in `knowledge-base/sops/<domain>/`. Synced via `make sync-kb`.
 
 **Gateway Tools** — Lambda-backed MCP tools the agent calls via AgentCore Gateway. Each tool is a directory under `gateway/tools/<name>/` with a Lambda handler and `tool_spec.json`. Auto-discovered by CDK.
 
-**Autonomy Controls** — Two SSM-backed toggles flippable without redeployment:
+**Autonomy Controls** — One SSM-backed toggle, flippable without redeployment:
 - `trigger-mode`: `auto` (poller auto-enqueues) / `manual` (human trigger)
-- `action-mode`: `full-auto` / `supervised` / `read-only`
 
-Enforced at the Lambda level, not just in the prompt. Flip via UI, `make autonomy`, or SSM console.
+Governs *initiation* only, enforced in `odata_poller` (not just the prompt). Flip via `make autonomy` or the SSM console — the `/autonomy` API exists but no UI consumes it yet.
+
+There is **no** runtime `action-mode` write kill-switch; an earlier build enforced one in a Gateway request interceptor, since removed. SAP write gating lives in the Cedar policies at the Gateway (role-based permits, `odata_delete` forbidden) and in the external AWS-for-SAP MCP server (`MCP_SERVER_WRITE_ENABLED` + per-op knobs). See `docs/security/AUTONOMY_CONTROLS.md`.
 
 **SAP Machine Identity** — SAP access uses service-account credentials only. The `odata_poller` Lambda is the sole direct SAP caller (service-account Basic Auth from Secrets Manager). All agent-driven SAP OData (read/write/discovery) goes through the external AWS for SAP MCP server, registered as a Gateway target. Interactive per-user SAP auth is handled by that MCP server's USER_FEDERATION flow, not by this stack.
 
@@ -46,7 +47,7 @@ EventBridge → odata_poller ──(service-account Basic Auth)──→ SAP ODa
                                            AgentCore Gateway
                                            ├── case_management (DynamoDB): get_case_state / update_case_state
                                            ├── knowledge_base (Bedrock KB): search_sap_sops / search_sap_api_docs
-                                           ├── notification (SES/Slack/Jira/ServiceNow): send_notification
+                                           ├── notification (SES/Jira/ServiceNow): send_notification
                                            ├── demo_ticket_management (DynamoDB, demo.enabled only)
                                            └── SAP OData (MCP target → external AWS for SAP MCP server):
                                                  find_sap_services / get_metadata / odata_read /
@@ -60,7 +61,7 @@ EventBridge → odata_poller ──(service-account Basic Auth)──→ SAP ODa
 | `agent/` | Strands agent entry point, skill router, specialist |
 | `gateway/tools/` | Gateway Lambda tools (one dir per tool) |
 | `lambdas/` | Non-gateway Lambdas (poller, invoker, write consumer, etc.) |
-| `skills/` | Domain skill definitions (config.json + base_prompt.txt) |
+| `skills/` | Domain skill definitions (config.json + base_prompt.txt) plus the shared `_platform_prompt.txt` |
 | `knowledge-base/` | SOPs and SAP API docs (synced to S3) |
 | `cdk/` | CDK infrastructure (config.yaml drives everything) |
 | `frontend/` | React app (Amplify Hosting) |
@@ -71,6 +72,6 @@ EventBridge → odata_poller ──(service-account Basic Auth)──→ SAP ODa
 Everything flows from `cdk/config.yaml`:
 - `stack_name_base` — names all resources, SSM paths, secrets
 - `sap.*` — base URL (poller service-account target), auth provider
-- `notification.channel` — SES/Slack/Jira/ServiceNow
+- `notification.channel` — SES/Jira/ServiceNow
 - `cedar_enforcement_mode` — LOG_ONLY or ENFORCE
 - `demo.enabled` — opt-in test infrastructure

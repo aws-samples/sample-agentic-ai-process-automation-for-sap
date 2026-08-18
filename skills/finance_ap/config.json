@@ -1,20 +1,93 @@
 {
   "skill_id": "finance_ap",
-  "display_name": "Finance \u2014 Accounts Payable",
+  "display_name": "Finance — Accounts Payable",
   "description": "Procure-to-pay exception resolution: three-way matching, price/quantity variances, missing documents, duplicate invoices.",
   "model_tier": "sonnet",
-  "max_turns": 45,
+  "max_turns": 15,
   "multi_agent": false,
   "orchestrator_tier": "haiku",
   "specialist_tier": "sonnet",
   "sap_service": {
-    "service": "API_SUPPLIERINVOICE_PROCESS_SRV",
-    "entities": {
-      "supplier_invoice": "A_SupplierInvoice",
-      "purchase_order": "A_PurchaseOrder",
-      "purchase_order_item": "A_PurchaseOrderItem",
-      "goods_receipt": "A_MaterialDocumentHeader"
-    }
+    "services": [
+      {
+        "service": "API_SUPPLIERINVOICE_PROCESS_SRV",
+        "entities": {
+          "supplier_invoice": {
+            "name": "A_SupplierInvoice",
+            "fields": ["SupplierInvoice", "FiscalYear", "CompanyCode", "DocumentDate", "PostingDate", "CreationDate", "SupplierInvoiceIDByInvcgParty", "InvoicingParty", "DocumentCurrency", "InvoiceGrossAmount", "UnplannedDeliveryCost", "DocumentHeaderText", "PaymentTerms", "PaymentBlockingReason", "SupplierInvoiceStatus"]
+          },
+          "supplier_invoice_item": {
+            "name": "A_SuplrInvcItemPurOrdRef",
+            "fields": ["SupplierInvoice", "FiscalYear", "SupplierInvoiceItem", "PurchaseOrder", "PurchaseOrderItem", "Plant", "TaxCode", "DocumentCurrency", "SupplierInvoiceItemAmount", "QuantityInPurchaseOrderUnit", "SupplierInvoiceItemText"]
+          }
+        },
+        "function_imports": {
+          "Release": {
+            "params": [
+              {"name": "SupplierInvoice", "type": "Edm.String", "required": true},
+              {"name": "FiscalYear", "type": "Edm.String", "required": true},
+              {"name": "DiscountDaysHaveToBeShifted", "type": "Edm.Boolean", "required": false, "default": "false"}
+            ]
+          },
+          "Post": {
+            "params": [
+              {"name": "SupplierInvoice", "type": "Edm.String", "required": true},
+              {"name": "FiscalYear", "type": "Edm.String", "required": true},
+              {"name": "DocumentDate", "type": "Edm.String", "required": false, "note": "SAP OData date literal: /Date(milliseconds)/"},
+              {"name": "PostingDate", "type": "Edm.String", "required": false, "note": "SAP OData date literal: /Date(milliseconds)/"}
+            ]
+          },
+          "Cancel": {
+            "params": [
+              {"name": "SupplierInvoice", "type": "Edm.String", "required": true},
+              {"name": "FiscalYear", "type": "Edm.String", "required": true},
+              {"name": "PostingDate", "type": "Edm.String", "required": true, "note": "SAP OData date literal: /Date(milliseconds)/"},
+              {"name": "ReversalReason", "type": "Edm.String", "required": true}
+            ]
+          }
+        }
+      },
+      {
+        "service": "API_PURCHASEORDER_PROCESS_SRV",
+        "entities": {
+          "purchase_order": {
+            "name": "A_PurchaseOrder",
+            "fields": ["PurchaseOrder", "CompanyCode", "PurchaseOrderType", "Supplier", "PurchasingOrganization", "PurchasingGroup", "PurchaseOrderDate", "DocumentCurrency", "PaymentTerms", "CreatedByUser", "CreationDate", "LastChangeDateTime", "Language", "IncotermsClassification", "IncotermsLocation1", "IncotermsLocation2", "ValidityStartDate", "ValidityEndDate", "ExchangeRate", "ExchangeRateIsFixed", "ReleaseIsNotCompleted", "PurchasingCompletenessStatus"]
+          },
+          "purchase_order_item": {
+            "name": "A_PurchaseOrderItem",
+            "fields": ["PurchaseOrder", "PurchaseOrderItem", "PurchaseOrderItemText", "Material", "Plant", "StorageLocation", "MaterialGroup", "OrderQuantity", "PurchaseOrderQuantityUnit", "NetPriceAmount", "NetPriceQuantity", "DocumentCurrency", "TaxCode", "PurchaseOrderItemCategory", "AccountAssignmentCategory", "GoodsReceiptIsExpected", "InvoiceIsExpected", "InvoiceIsGoodsReceiptBased", "IsCompletelyDelivered", "IsFinallyInvoiced", "PurchaseRequisition", "PurchaseRequisitionItem", "DeliveryAddressID", "DeliveryAddressName", "DeliveryAddressCityName", "DeliveryAddressPostalCode", "DeliveryAddressStreetName", "DeliveryAddressCountry"]
+          },
+          "purchase_order_schedule_line": {
+            "name": "A_PurchaseOrderScheduleLine",
+            "fields": ["PurchasingDocument", "PurchasingDocumentItem", "ScheduleLine", "DeliveryDate", "ScheduleLineOrderQuantity", "PurchaseOrderQuantityUnit", "ScheduleLineDeliveryDate", "PerformancePeriodStartDate", "PerformancePeriodEndDate"]
+          }
+        }
+      },
+      {
+        "service": "API_MATERIAL_DOCUMENT_SRV",
+        "entities": {
+          "goods_receipt": {
+            "name": "A_MaterialDocumentHeader",
+            "fields": ["MaterialDocumentYear", "MaterialDocument", "InventoryTransactionType", "DocumentDate", "PostingDate", "CreationDate", "CreationTime", "CreatedByUser", "MaterialDocumentHeaderText", "ReferenceDocument", "VersionForPrintingSlip", "ManualPrintIsTriggered", "CtrlPostgForExtWhseMgmtSyst", "GoodsMovementCode"]
+          },
+          "goods_receipt_item": {
+            "name": "A_MaterialDocumentItem",
+            "fields": ["MaterialDocumentYear", "MaterialDocument", "MaterialDocumentItem", "Material", "Plant", "StorageLocation", "Batch", "GoodsMovementType", "InventoryStockType", "InventoryValuationType", "InventorySpecialStockType", "Supplier", "Customer", "SalesOrder", "SalesOrderItem", "SalesOrderScheduleLine", "PurchaseOrder", "PurchaseOrderItem", "WBSElement", "ManufacturingOrder", "ManufacturingOrderItem", "GoodsMovementRefDocType", "GoodsMovementReasonCode", "Delivery", "DeliveryItem", "AccountAssignmentCategory", "CostCenter", "ControllingArea", "CostObject", "GLAccount", "FunctionalArea", "ProfitabilitySegment", "ProfitCenter", "MasterFixedAsset", "FixedAsset", "MaterialBaseUnit", "QuantityInBaseUnit", "EntryUnit", "QuantityInEntryUnit", "CompanyCodeCurrency", "GdsMvtExtAmtInCoCodeCrcy", "SlsPrcAmtInclVATInCoCodeCrcy", "FiscalYear", "FiscalYearPeriod", "FiscalYearVariant", "IssgOrRcvgMaterial", "IssgOrRcvgBatch", "IssuingOrReceivingPlant", "IssuingOrReceivingStorageLoc", "IssuingOrReceivingStockType", "IssgOrRcvgSpclStockInd", "IssuingOrReceivingValType", "IsCompletelyDelivered", "MaterialDocumentItemText", "GoodsRecipientName", "UnloadingPointName", "ShelfLifeExpirationDate", "ManufactureDate", "SerialNumbersAreCreatedAutomly", "Reservation", "ReservationItem", "ReservationIsFinallyIssued", "SpecialStockIdfgSalesOrder", "SpecialStockIdfgSalesOrderItem", "SpecialStockIdfgWBSElement", "IsAutomaticallyCreated", "MaterialDocumentLine", "MaterialDocumentParentLine", "HierarchyNodeLevel", "GoodsMovementIsCancelled", "ReversedMaterialDocumentYear", "ReversedMaterialDocument", "ReversedMaterialDocumentItem", "ReferenceDocumentFiscalYear", "InvtryMgmtRefDocumentItem", "InvtryMgmtReferenceDocument", "MaterialDocumentPostingType", "InventoryUsabilityCode", "EWMWarehouse", "EWMStorageBin", "DebitCreditCode", "StockSegment", "IssgOrRcvgStockSegment"]
+          }
+        }
+      }
+    ]
+  },
+  "constants": {
+    "QTY_VARIANCE_PCT": 5,
+    "QTY_VARIANCE_UNITS": 10,
+    "PRICE_VARIANCE_PCT": 2,
+    "PRICE_VARIANCE_ABS_USD": 0.50,
+    "LINE_AMOUNT_TOLERANCE_USD": 100,
+    "DUPLICATE_MATCH_WINDOW_USD": 100,
+    "MISSING_GR_ESCALATION_DAYS": 5,
+    "GOODS_IN_TRANSIT_REMINDER_DAYS": 3
   },
   "gateway_tools": [
     "get_case_state",
@@ -24,22 +97,26 @@
     "odata_function_import",
     "search_sap_sops",
     "search_sap_api_docs",
+    "load_sop",
     "send_notification",
+    "demo_create_ticket",
+    "demo_get_ticket",
     "find_sap_services",
     "get_metadata",
-    "get_service_hints",
     "odata_read",
-    "odata_count"
+    "odata_count",
+    "get_precedent",
+    "check_vendor_risk"
   ],
   "process_type_to_sop": {
-    "price_variance": "finance_ap/price_variance.pdf",
-    "quantity_variance": "finance_ap/quantity_variance.pdf",
-    "uom_mismatch": "finance_ap/uom_mismatch.pdf",
-    "missing_goods_receipt": "finance_ap/missing_goods_receipt.pdf",
-    "missing_purchase_order": "finance_ap/missing_purchase_order.pdf",
-    "duplicate_invoice": "finance_ap/duplicate_invoice.pdf",
-    "invoice_matching": "finance_ap/invoice_matching.pdf",
-    "three_way_match": "finance_ap/invoice_matching.pdf",
-    "ap_exception": "finance_ap/invoice_matching.pdf"
+    "price_variance": "finance_ap/price_variance.txt",
+    "quantity_variance": "finance_ap/quantity_variance.txt",
+    "uom_mismatch": "finance_ap/uom_mismatch.txt",
+    "missing_goods_receipt": "finance_ap/missing_goods_receipt.txt",
+    "missing_purchase_order": "finance_ap/missing_purchase_order.txt",
+    "duplicate_invoice": "finance_ap/duplicate_invoice.txt",
+    "invoice_matching": "finance_ap/invoice_matching.txt",
+    "three_way_match": "finance_ap/invoice_matching.txt",
+    "ap_exception": "finance_ap/invoice_matching.txt"
   }
 }

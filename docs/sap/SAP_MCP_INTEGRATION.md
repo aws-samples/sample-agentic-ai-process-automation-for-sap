@@ -100,12 +100,13 @@ sap_mcp:
     # Auto-resolved from the stack's Outputs; override any of these if needed:
     # invocation_url: ""
     inbound_cognito:
-      # pool_id / client_id / token_endpoint auto-resolved from Outputs; secret ARN required:
-      client_secret_arn: "arn:aws:secretsmanager:us-east-1:ACCT:secret:ext-cognito-XXXX"
+      # pool_id / client_id / token_endpoint auto-resolved from Outputs; secret ARN required.
+      # Must be the COMPLETE ARN, including the 6-char suffix Secrets Manager appends:
+      client_secret_arn: "arn:aws:secretsmanager:us-east-1:ACCT:secret:ext-cognito-XXXX-AbCdEf"
     # EntraId inbound instead of Cognito — supply these and set inbound_auth_provider: EntraId:
     # entra_discovery_url: "https://login.microsoftonline.com/<tenant-id>/v2.0/.well-known/openid-configuration"
     # entra_client_id: "<entra-app-client-id>"
-    # entra_client_secret_arn: "arn:aws:secretsmanager:...:secret:entra-XXXX"
+    # entra_client_secret_arn: "arn:aws:secretsmanager:...:secret:entra-XXXX-AbCdEf"
 ```
 
 > Which target variant is minted (Service vs User) is **derived from `auth_profile`'s outbound
@@ -203,7 +204,7 @@ sap_mcp:
     stack_name: sap-mcp-server-prod   # AWS CFN stack to read outputs from
     inbound_auth_provider: Cognito    # Cognito (default) | EntraId
     inbound_cognito:
-      client_secret_arn: "arn:aws:secretsmanager:us-east-1:ACCT:secret:ext-cognito-XXXX"
+      client_secret_arn: "arn:aws:secretsmanager:us-east-1:ACCT:secret:ext-cognito-XXXX-AbCdEf"
 ```
 
 > The Service vs User target variant is derived from `auth_profile`'s outbound axis (`m2m-*` →
@@ -240,13 +241,18 @@ Add the SAP MCP tool names to the relevant skill's `gateway_tools`:
 {
   "skill_id": "finance_accruals",
   "gateway_tools": [
-    "find_sap_services", "get_metadata", "get_service_hints",
+    "find_sap_services", "get_metadata",
     "odata_read", "odata_count",
     "odata_create", "odata_update", "odata_function_import",
     "get_case_state", "update_case_state", "send_notification", "search_sap_sops"
   ]
 }
 ```
+
+Grant only what an instruction reaches for. Every name here costs its JSON
+schema on every model request, called or not — `get_service_hints` is exposed by
+the MCP server but appears in no shipped skill's grants, because no prompt or SOP
+names it. See [Optimization 4](../evaluations/INFERENCE_COST_OPTIMIZATION.md#optimization-4-remove-redundant-kb-searches).
 
 The SAP MCP Server exposes reads — `find_sap_services`, `get_metadata`, `get_service_hints`,
 `odata_read`, `odata_count` — and writes — `odata_create`, `odata_update`, `odata_delete`,
@@ -379,12 +385,20 @@ the external pool returns 200; a token from our pool returns this exact 401.)
 
 **`AccessDenied` on `GetSecretValue` when the credential-provider custom resource creates** —
 e.g. `User: ...ServiceExtOAuth2Provider... is not authorized to perform: secretsmanager:GetSecretValue`.
-Caused by granting on a secret ARN that doesn't match the configured one. A complete Secrets
-Manager ARN ends in a 6-char random suffix (`...-Tn5pYW`) — granting with a `-??????` partial
-pattern (the old `fromSecretPartialArn` behavior) does NOT match it. The adapter now grants on
-`${clientSecretArn}*`, which matches complete or partial ARNs. If you see this, confirm the
-`client_secret_arn` (or `entra_client_secret_arn`) in config is the exact ARN of an existing
-secret.
+Two distinct causes produce this identical error, and only one of them is about IAM:
+
+1. **The configured identifier resolves to no secret** — most often an ARN hand-copied without the
+   6-character suffix Secrets Manager appends (`...-Tn5pYW`). Secrets Manager answers
+   `AccessDenied`, *not* `ResourceNotFoundException`, so as not to reveal a secret's existence to
+   an unauthorized caller. Every signal then points at IAM, where nothing is wrong: the
+   `${clientSecretArn}*` grant matches the truncated string, and `simulate-principal-policy`
+   reports "allowed" because it string-matches without checking existence. Synth now pre-empts
+   this — `assertSecretResolves` (`cdk/lib/utils/cfn-outputs-resolver.ts`) does a real
+   `DescribeSecret` from the deployer's credentials and aborts on not-found. Get the exact value
+   with `aws secretsmanager describe-secret --secret-id <name> --query ARN`.
+2. **A genuine grant mismatch** — granting with a `-??????` partial pattern (the old
+   `fromSecretPartialArn` behavior) does not match a complete ARN. The adapter grants on
+   `${clientSecretArn}*`, which matches either form.
 
 **Target is `READY` but its tools don't appear in `tools/list` (empty)** — two distinct causes:
 1. **Wrong OAuth scope (external mode).** The Gateway provider is requesting a scope the
@@ -392,7 +406,10 @@ secret.
    external Cognito pool, so `external_stack.inbound_scopes` must be one of ITS scopes —
    `awsforsap-mcp-m2m-resource-server-<UniqueId>/read` — not `<base>-gateway/read`. A foreign
    scope yields a token the runtime won't honor for listing, so the target is `READY` but
-   surfaces zero tools.
+   surfaces zero tools. With `inbound_auth_provider: EntraId` the scope *shape* also differs:
+   Entra's client-credentials grant takes exactly one `<App ID URI>/.default`, and a
+   Cognito-style `<pool>/read` is rejected with a 400 the Gateway reports as
+   `Error parsing ClientCredentials response`.
 2. **`listing_mode: DYNAMIC`.** DYNAMIC forwards `tools/list` per active MCP session and does
    **not** surface tools in the Gateway's *aggregate* `tools/list`. Use `listing_mode: DEFAULT`
    to pre-sync the catalog so tools appear in the aggregate list (verified 2026-06-05: switching

@@ -5,7 +5,7 @@
 Webhook Processor Lambda
 
 Unified inbound processor for all notification channels.
-Receives events from SES (raw email via S3), Slack, Jira, or ServiceNow.
+Receives events from SES (raw email via S3), Jira, or ServiceNow.
 Normalizes into a standard payload and enqueues to the agent invocation
 queue (SQS FIFO).
 
@@ -21,11 +21,14 @@ import json
 import logging
 import os
 import re
-import time
 import uuid
 
 import boto3
 import mailparser
+
+# Canonical case identity codec — ships in the shared_types layer. Inbound content
+# is untrusted, so the tolerant `try_` variant is the right entry point.
+from case_key import try_normalize_case_id
 from email_reply_parser import EmailReplyParser
 
 logger = logging.getLogger()
@@ -93,19 +96,7 @@ def _verify_webhook_signature(event: dict) -> dict | None:
     if event.get("isBase64Encoded"):
         raw_body = base64.b64decode(raw_body).decode()
 
-    if CHANNEL == "slack":
-        ts = headers.get("x-slack-request-timestamp", "")
-        if not ts or abs(time.time() - int(ts)) > 300:
-            return _resp(401, {"error": "Request timestamp expired"})
-        sig_base = f"v0:{ts}:{raw_body}".encode()
-        expected = (
-            "v0="
-            + hmac.new(WEBHOOK_SECRET.encode(), sig_base, hashlib.sha256).hexdigest()
-        )
-        if not hmac.compare_digest(expected, headers.get("x-slack-signature", "")):
-            return _resp(401, {"error": "Invalid signature"})
-
-    elif CHANNEL == "jira":
+    if CHANNEL == "jira":
         sig_header = headers.get("x-hub-signature", "")
         if not sig_header.startswith("sha256="):
             return _resp(401, {"error": "Missing signature"})
@@ -308,22 +299,6 @@ def _normalize_webhook(event: dict) -> dict | None:
     except json.JSONDecodeError:
         body = event
 
-    # Slack url_verification challenge
-    if body.get("type") == "url_verification":
-        return None
-
-    # Slack message event
-    if body.get("event", {}).get("type") == "message":
-        evt = body["event"]
-        return {
-            "source": "slack",
-            "case_id": _extract_case_id(evt.get("text", "")),
-            "sender": evt.get("user", ""),
-            "message": _sanitize(evt.get("text", ""), source="slack"),
-            "channel": evt.get("channel", ""),
-            "thread_ts": evt.get("thread_ts"),
-        }
-
     # ServiceNow webhook
     if "sys_id" in body and "short_description" in body:
         return {
@@ -372,18 +347,15 @@ def _enqueue(normalized: dict) -> None:
         return
 
     case_id = normalized.get("case_id", "")
-    # Only use case_id for routing if it's in canonical document_number#item_id
-    # format. Partial matches (e.g. "PO 4500002597") stay in the payload as
-    # context for the agent but don't become the authoritative case_id — the
-    # agent resolves the actual case via its tools.
-    canonical_id = case_id if "#" in case_id else ""
+    # Only route on the id if it is a real case identity. A partial hint (e.g.
+    # "PO 4500002597") stays in the payload as context but is not authoritative —
+    # the agent resolves the actual case via its tools.
+    canonical_id = try_normalize_case_id(case_id) or ""
 
-    # SQS FIFO MessageGroupId only allows alphanumeric and punctuation, no spaces
-    group_id = (
-        canonical_id.replace(" ", "-")
-        if canonical_id
-        else f"webhook-{uuid.uuid4().hex[:8]}"
-    )
+    # A canonical id is already a legal MessageGroupId, so it is used verbatim —
+    # matching the poller and ticket-resume producers, which is what keeps one
+    # case in one FIFO group.
+    group_id = canonical_id or f"webhook-{uuid.uuid4().hex[:8]}"
 
     sqs.send_message(
         QueueUrl=QUEUE_URL,
@@ -405,8 +377,13 @@ def _extract_case_id(text: str) -> str:
     """
     Extract a case ID from free text (subject lines, messages, etc.).
 
-    Looks for patterns like Case ID: 5100001948#2026, CASE-12345,
+    Looks for patterns like Case ID: 5100001948-2026, CASE-12345,
     PO 4500012345, or INV 5105600123.
+
+    Only the first pattern yields an authoritative identity, and it is returned in
+    canonical form — outbound notifications written before the canonical format
+    existed quote `doc#item`, and a reply to one of those must still route. The
+    remaining patterns are hints the agent resolves via its tools.
 
     Args:
         text: Input text to search.
@@ -414,10 +391,12 @@ def _extract_case_id(text: str) -> str:
     Returns:
         str: Extracted case ID, or empty string if none found.
     """
-    # Explicit "Case ID: X#Y" pattern (from notification emails)
-    m = re.search(r"[Cc]ase\s*(?:ID|id)[:\s]+(\S+#\S+)", text)
+    # Explicit "Case ID: X" pattern (from notification emails)
+    m = re.search(r"[Cc]ase\s*(?:ID|id)[:\s]+(\S+)", text)
     if m:
-        return m.group(1)
+        canonical = try_normalize_case_id(m.group(1))
+        if canonical:
+            return canonical
     m = re.search(r"(?:CASE|case)[-_]?(\w+)", text)
     if m:
         return m.group(0)

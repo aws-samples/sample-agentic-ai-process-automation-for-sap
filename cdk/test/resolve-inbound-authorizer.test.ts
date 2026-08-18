@@ -263,30 +263,59 @@ describe("resolveOutboundProfile", () => {
 })
 
 describe("resolveModeProfile", () => {
-  it("batch runner disabled when the artifact is absent", () => {
+  it("modes UNKNOWN (null) when the artifact is absent", () => {
+    // null, not [] — the absent artifact is the all-no-op cognito-basic default, which
+    // DOES declare autonomous. An empty list would read as "autonomous not declared"
+    // and refuse the autonomous path on the default deployment.
     const out = resolveModeProfile({ artifactPath: path.join(os.tmpdir(), "no-such-mode.json") })
-    expect(out).toEqual({ batchRunnerEnabled: false, modes: [] })
+    expect(out).toEqual({ batchRunnerEnabled: false, modes: null, profile: null })
   })
 
-  it("batch runner disabled when there is no mode block", () => {
+  it("modes UNKNOWN (null) when there is no mode block", () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "authprof-mode-"))
     const artifactPath = path.join(dir, ".auth-profile-resolved.json")
-    fs.writeFileSync(artifactPath, JSON.stringify({ outbound: { flow: "M2M" } }))
-    expect(resolveModeProfile({ artifactPath })).toEqual({ batchRunnerEnabled: false, modes: [] })
+    fs.writeFileSync(
+      artifactPath,
+      JSON.stringify({ profile: "cognito-m2m", outbound: { flow: "M2M" } }),
+    )
+    expect(resolveModeProfile({ artifactPath })).toEqual({
+      batchRunnerEnabled: false,
+      modes: null,
+      profile: "cognito-m2m",
+    })
   })
 
-  it("reads batch_runner_enabled and modes from the mode block", () => {
+  it("reads batch_runner_enabled, modes and profile from the mode block", () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "authprof-mode-"))
     const artifactPath = path.join(dir, ".auth-profile-resolved.json")
     fs.writeFileSync(
       artifactPath,
       JSON.stringify({
+        profile: "entra-userfed",
         mode: { modes: ["live", "batch"], batch_runner_enabled: true, requires_refresh: true },
       }),
     )
     expect(resolveModeProfile({ artifactPath })).toEqual({
       batchRunnerEnabled: true,
       modes: ["live", "batch"],
+      profile: "entra-userfed",
+    })
+  })
+
+  it("carries a live-only mode list so the autonomous gate can see it", () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "authprof-mode-"))
+    const artifactPath = path.join(dir, ".auth-profile-resolved.json")
+    fs.writeFileSync(
+      artifactPath,
+      JSON.stringify({
+        profile: "entra-obo",
+        mode: { modes: ["live"], batch_runner_enabled: false, requires_refresh: false },
+      }),
+    )
+    expect(resolveModeProfile({ artifactPath })).toEqual({
+      batchRunnerEnabled: false,
+      modes: ["live"],
+      profile: "entra-obo",
     })
   })
 })

@@ -1,20 +1,16 @@
 [
   {
     "name": "get_case_state",
-    "description": "Get an ERP exception case from DynamoDB by case key (document_number + item_id). For AP: document_number=supplier invoice number, item_id=fiscal year.",
+    "description": "Get an ERP exception case from DynamoDB by its case_id. The case_id is given to you in the prompt; it has the form {document_number}-{item_id} (for AP: supplier invoice number and fiscal year).",
     "inputSchema": {
       "type": "object",
       "properties": {
-        "document_number": {
+        "case_id": {
           "type": "string",
-          "description": "Case partition key — supplier invoice number (AP)"
-        },
-        "item_id": {
-          "type": "string",
-          "description": "Case sort key — fiscal year (AP)"
+          "description": "Case identity — {document_number}-{item_id}, e.g. 5100001976-2026"
         }
       },
-      "required": ["document_number", "item_id"]
+      "required": ["case_id"]
     }
   },
   {
@@ -23,24 +19,20 @@
     "inputSchema": {
       "type": "object",
       "properties": {
-        "document_number": {
+        "case_id": {
           "type": "string",
-          "description": "Case partition key — supplier invoice number (AP)"
-        },
-        "item_id": {
-          "type": "string",
-          "description": "Case sort key — fiscal year (AP)"
+          "description": "Case identity — {document_number}-{item_id}, e.g. 5100001976-2026"
         },
         "updates": {
           "type": "string",
-          "description": "JSON string of fields to update (e.g. {\"status\": \"processing\", \"exception_type\": \"PRICE\"})"
+          "description": "JSON string of fields to update (e.g. {\"status\": \"processing\", \"exception_type\": \"PRICE\"}). `updated_at`, `action_log` and `inquiry_sent_at` are recorded automatically; any value you send for them is discarded."
         },
         "action": {
           "type": "string",
           "description": "Action name for history tracking (e.g. 'sap_updated', 'invoice_released', 'manual_review_required')"
         }
       },
-      "required": ["document_number", "item_id", "updates", "action"]
+      "required": ["case_id", "updates", "action"]
     }
   }
 ]

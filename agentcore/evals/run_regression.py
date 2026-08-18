@@ -17,8 +17,15 @@ Workflow:
      writes the matching DynamoDB case record, and rewrites the test payload to the
      real SAP keys
   3. Invokes agent for each test case via AgentCore runtime
-  4. Runs on-demand evaluations (built-in + custom) against each session
-  5. Prints pass/fail summary
+  4. Asserts each case's `expected` block against the persisted case record
+     (deterministic — see check_expectations)
+  5. Runs on-demand LLM evaluations against each session
+  6. Prints pass/fail summary
+
+A case passes only if BOTH the deterministic assertions and the judge threshold
+pass. The judges score how well the agent explained itself; only the assertions
+can tell whether it did the right thing. A run that auto-posts an above-tolerance
+invoice scores well on fluency, so judges alone cannot gate a release.
 
 Run this BEFORE deploying model changes or SOP updates.
 """
@@ -91,10 +98,11 @@ def seed_cases(test_cases: list, stack_name: str, region: str) -> list:
             print(f"no invoice number returned (po={sap.get('po_number')}); skipping")
             continue
 
-        # AP case key: document_number = supplier invoice number, item_id = fiscal year.
+        # AP case identity: {supplier invoice number}-{fiscal year}.
         fiscal_year = str(datetime.now(timezone.utc).year)
         table.put_item(
             Item={
+                "case_id": f"{invoice_number}-{fiscal_year}",
                 "document_number": invoice_number,
                 "item_id": fiscal_year,
                 "domain": "finance_ap",
@@ -114,6 +122,7 @@ def seed_cases(test_cases: list, stack_name: str, region: str) -> list:
         )
 
         # Rewrite the invoke payload to point at the real SAP keys.
+        tc["payload"]["case_id"] = f"{invoice_number}-{fiscal_year}"
         tc["payload"]["document_number"] = invoice_number
         tc["payload"]["item_id"] = fiscal_year
         print(f"invoice={invoice_number} po={sap.get('po_number')}")
@@ -140,6 +149,78 @@ def invoke_agent(runtime_arn: str, payload: dict, region: str) -> str:
             body += event["chunk"]["bytes"]
 
     return session_id
+
+
+# Maps an `expected.outcome` in ground_truth.json to the CaseStatus values that
+# satisfy it. Kept here rather than in the schema because "auto_release" is an
+# eval-level assertion about agent behaviour, not a case state.
+OUTCOME_TO_STATUS = {
+    "auto_release": {"sap_updated", "complete"},
+    "approval_required": {"awaiting_human_input", "manual_review_required"},
+    "manual_review_required": {"manual_review_required", "awaiting_human_input"},
+}
+
+
+def get_case_record(case_id: str, stack_name: str, region: str) -> dict:
+    """Read back the persisted case, which is where the agent's real effect landed."""
+    from utils.case_key import to_case_key
+
+    ssm = boto3.client("ssm", region_name=region)
+    table_name = ssm.get_parameter(Name=f"/{stack_name}/dynamodb/cases-table")[
+        "Parameter"
+    ]["Value"]
+    table = boto3.resource("dynamodb", region_name=region).Table(table_name)
+    return table.get_item(Key=to_case_key(case_id)).get("Item") or {}
+
+
+def check_expectations(expected: dict, case: dict) -> list[str]:
+    """Assert an `expected` block against a persisted case. Returns failure strings.
+
+    Deterministic counterpart to the LLM judges: it reads what the agent actually
+    did (tool calls in `agent_traces`, final `status`) rather than how well it
+    narrated it.
+    """
+    failures = []
+
+    called = {
+        seg.get("tool_name")
+        for trace in case.get("agent_traces") or []
+        for seg in trace.get("segments") or []
+        if seg.get("type") == "tool" and seg.get("tool_name")
+    }
+
+    missing = [t for t in expected.get("required_tool_calls", []) if t not in called]
+    if missing:
+        failures.append(
+            f"missing required tool calls {missing} (called: {sorted(called) or 'none'})"
+        )
+
+    outcome = expected.get("outcome")
+    if outcome:
+        allowed = OUTCOME_TO_STATUS.get(outcome)
+        if allowed is None:
+            failures.append(
+                f"unknown expected.outcome '{outcome}' — add it to OUTCOME_TO_STATUS"
+            )
+        else:
+            actual = case.get("status")
+            if actual not in allowed:
+                failures.append(
+                    f"outcome '{outcome}' expects status in {sorted(allowed)}, got '{actual}'"
+                )
+
+    # A tool that errored but left the case in an acceptable status still means the
+    # run did not go as designed, so surface it rather than passing silently.
+    errored = [
+        seg.get("tool_name")
+        for trace in case.get("agent_traces") or []
+        for seg in trace.get("segments") or []
+        if seg.get("status") == "error"
+    ]
+    if errored:
+        failures.append(f"tool calls reported status=error: {sorted(set(errored))}")
+
+    return failures
 
 
 def run_evals(agent_id: str, session_id: str, region: str) -> list[dict]:
@@ -191,6 +272,10 @@ def main():
         help="Minimum average score to pass (default: 0.7)",
     )
     parser.add_argument(
+        "--results-file",
+        help="Write the full per-case results (assertions + judge scores) to this path",
+    )
+    parser.add_argument(
         "--seed",
         action="store_true",
         help="Create each case's SAP documents + DynamoDB record before invoking "
@@ -227,11 +312,24 @@ def main():
             session_id = invoke_agent(runtime_arn, tc["payload"], args.region)
             print(f"  Session: {session_id}")
 
+            print("  Checking expectations...")
+            case_id = tc["payload"].get("case_id") or (
+                f"{tc['payload']['document_number']}-{tc['payload']['item_id']}"
+            )
+            case = get_case_record(case_id, args.stack_name, args.region)
+            failures = (
+                check_expectations(tc["expected"], case)
+                if tc.get("expected")
+                else ["no expected block — the case asserts nothing"]
+            )
+            if not case:
+                failures.append(f"no persisted case record found for {case_id}")
+
             print("  Running evaluations...")
             evals = run_evals(agent_id, session_id, args.region)
 
             avg_score = sum(e["score"] for e in evals) / len(evals) if evals else 0
-            passed = avg_score >= args.threshold
+            passed = not failures and avg_score >= args.threshold
 
             results_summary.append(
                 {
@@ -239,12 +337,15 @@ def main():
                     "session_id": session_id,
                     "avg_score": avg_score,
                     "passed": passed,
+                    "failures": failures,
                     "evals": evals,
                 }
             )
 
             status = "✅ PASS" if passed else "❌ FAIL"
             print(f"  {status} (avg: {avg_score:.2f})")
+            for f in failures:
+                print(f"    ✗ ASSERTION: {f}")
             for e in evals:
                 indicator = "✓" if e["score"] >= args.threshold else "✗"
                 print(
@@ -271,11 +372,21 @@ def main():
     print(f"  Passed: {passed}/{total}")
     print(f"  Threshold: {args.threshold}")
 
+    if args.results_file:
+        Path(args.results_file).write_text(
+            json.dumps(results_summary, indent=2), encoding="utf-8"
+        )
+        print(f"  Results written to {args.results_file}")
+
     if passed < total:
         print("\n  FAILED TESTS:")
         for r in results_summary:
             if not r["passed"]:
-                print(f"    - {r['test_id']}: avg={r.get('avg_score', 0):.2f}")
+                detail = "; ".join(r.get("failures") or []) or r.get("error") or ""
+                print(
+                    f"    - {r['test_id']}: avg={r.get('avg_score', 0):.2f}"
+                    + (f" — {detail}" if detail else "")
+                )
         sys.exit(1)
     else:
         print("\n  All tests passed! ✅")

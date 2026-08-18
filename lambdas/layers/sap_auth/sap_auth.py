@@ -33,6 +33,16 @@ _secretsmanager = boto3.client("secretsmanager")
 
 _sap_creds: tuple[str, str, str] | None = None
 
+# Callers append the OData service root themselves, so a base_url carrying it
+# would yield a doubled path. config.yaml's sap.base_url is conventionally
+# written in the OData-root form, so accept either and strip it here.
+_ODATA_ROOT_RE = re.compile(r"/sap/opu/odata/sap/?$", re.IGNORECASE)
+
+
+def normalize_base_url(url: str) -> str:
+    """Return `url` reduced to the bare host root (no trailing OData path)."""
+    return _ODATA_ROOT_RE.sub("", url.strip()).rstrip("/")
+
 
 def get_sap_credentials() -> tuple[str, str, str]:
     """Return cached (base_url, username, password) from Secrets Manager."""
@@ -45,7 +55,11 @@ def get_sap_credentials() -> tuple[str, str, str]:
         secret = json.loads(
             _secretsmanager.get_secret_value(SecretId=arn)["SecretString"]
         )
-        _sap_creds = (secret["base_url"], secret["username"], secret["password"])
+        _sap_creds = (
+            normalize_base_url(secret["base_url"]),
+            secret["username"],
+            secret["password"],
+        )
     return _sap_creds
 
 

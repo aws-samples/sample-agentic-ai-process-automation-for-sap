@@ -66,16 +66,16 @@ The generic engine (`polling_engine.py`) handles the pipeline: fetch → iterate
   },
 
   "skip_when": [                          // Skip record if ANY condition is true
-    { "field": "Amount", "op": "lte", "value": 0, "cast": "float" },
+    { "field": "Amount", "op": "lte", "value": 0 },
     { "field": "Name", "op": "blank" },
     { "op": "and", "conditions": [...] }  // Compound condition
   ],
 
   "process_type": {
     "rules": [                            // First match wins
-      { "when": { "field": "WBS", "op": "present" }, "then": "wbs_accrual" }
+      { "when": { "field": "IsTooling", "op": "present" }, "then": "tooling_accrual" }
     ],
-    "default": "po_accrual"
+    "default": "po_accrual"               // Every emitted type needs a process_type_to_sop entry
   },
 
   "title": "PO {parent.DocNumber} / Line {child.ItemNumber}",
@@ -139,9 +139,10 @@ Discovery is done at runtime via the external AWS for SAP MCP server — no meta
 Follow the skill-creation mechanics in **[`ADDING_SKILLS.md`](ADDING_SKILLS.md)** (create `config.json` + `base_prompt.txt` + SOPs from the `skills/example_finance_accruals/` template). The only use-case-specific notes:
 
 - [ ] **2.1** Create the skill (`config.json`, `base_prompt.txt`, SOPs) per `ADDING_SKILLS.md`
-  - Use the entity/field names from Phase 1 in `base_prompt.txt`
+  - Put the service and entity set names from Phase 1 in `config.json` → `sap_service`; the shared
+    platform preamble renders them into the prompt, so `base_prompt.txt` stays domain-only
   - One SOP per process_type (or share SOPs across related types)
-- [ ] **2.2** Sync SOPs to S3: `./scripts/sync-knowledge-base.sh --sops-only`
+- [ ] **2.2** Sync SOPs to S3: `python3 launch.py sync-kb --only sops`
 
 ### Phase 3: OData Poller (if automated polling needed)
 
@@ -184,7 +185,7 @@ The power automates Phases 2, 3, and 4 by:
 2. Asking you which entities/fields are relevant to the new domain
 3. Generating:
    - `skills/<domain>/config.json`
-   - `skills/<domain>/base_prompt.txt` (with entity/field references from the specs)
+   - `skills/<domain>/base_prompt.txt` (domain persona; entity/field names go in `config.json` → `sap_service`)
    - Starter SOP draft (delegates to `@author-sop` for RFC 2119 structure)
    - `lambdas/odata_poller/domains/<domain>.json` (polling config)
    - `types/cases.schema.json` update (new enum value + fields)
@@ -206,11 +207,12 @@ The power automates Phases 2, 3, and 4 by:
 | SOP authoring power | `.kiro/powers/author-sop-power/author-sop.md` |
 | Skill-creation guide | `docs/extending/ADDING_SKILLS.md` |
 | Skill config example | `skills/example_finance_accruals/config.json` |
-| Base prompt example | `skills/example_finance_accruals/base_prompt.txt` |
+| Base prompt example (domain-only) | `skills/example_finance_accruals/base_prompt.txt` |
+| Shared platform mechanics | `skills/_platform_prompt.txt` |
 | SAP MCP server design | `docs/design-decisions/012-sap-mcp-server-integration.md` |
 | Poller domain configs | `lambdas/odata_poller/domains/*.json` |
 | Polling engine | `lambdas/odata_poller/polling_engine.py` |
-| Poller Lambda (thin handler) | `lambdas/odata_poller/odata_poller.py` |
+| Poller Lambda (thin handler) | `lambdas/odata_poller/index.py` |
 | Types schema (single source of truth) | `types/cases.schema.json` |
 | Domain config validator | `scripts/dev/validate_domain_configs.py` |
 | Type generation + validation | `scripts/dev/generate-types.sh` |

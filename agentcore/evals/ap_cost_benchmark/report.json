@@ -1,129 +1,199 @@
 {
-  "timestamp": "2026-04-29T04:59:53.856239+00:00",
+  "timestamp": "2026-08-08T02:47:25.760169+00:00",
   "summary": {
     "total_cases": 50,
-    "cases_with_cost": 41,
-    "total_cost_usd": 10.5278,
-    "avg_cost_usd": 0.2568,
-    "median_cost_usd": 0.2141,
+    "cases_with_cost": 50,
+    "total_cost_usd": 26.17,
+    "avg_cost_usd": 0.5234,
+    "median_cost_usd": 0.507,
     "status_distribution": {
-      "resolved": 6,
-      "processing": 10,
-      "complete": 7,
-      "investigating": 1,
-      "analyzing": 1,
-      "awaiting_human_input": 24,
-      "manual_review_required": 1
-    }
+      "complete": 40,
+      "manual_review_required": 10
+    },
+    "lifecycle_valid_cases": 50,
+    "ticket_action_distribution": {
+      "approved": 15,
+      "replied": 11,
+      "denied": 1
+    },
+    "valid": true
   },
+  "validation_errors": [],
   "cases": [
     {
       "id": "AP-B01",
       "complexity": "simple",
       "process_type": "price_variance",
       "scenario": "Small price variance 2%",
-      "status": "resolved",
-      "cost_usd": 0.464277,
-      "input_tokens": 39892,
-      "output_tokens": 4963,
-      "cache_read_tokens": 466326,
-      "invocations": 2
+      "status": "complete",
+      "cost_usd": 0.312079,
+      "input_tokens": 26,
+      "output_tokens": 4977,
+      "cache_read_tokens": 353764,
+      "invocations": 1,
+      "ticket_actions": [],
+      "lifecycle_valid": true,
+      "lifecycle_errors": []
     },
     {
       "id": "AP-B02",
       "complexity": "simple",
       "process_type": "price_variance",
       "scenario": "Price variance 5% under threshold",
-      "status": "resolved",
-      "cost_usd": 0.402029,
-      "input_tokens": 35624,
-      "output_tokens": 4437,
-      "cache_read_tokens": 372321,
-      "invocations": 2
+      "status": "complete",
+      "cost_usd": 0.59177,
+      "input_tokens": 30,
+      "output_tokens": 7400,
+      "cache_read_tokens": 413955,
+      "invocations": 2,
+      "ticket_actions": [
+        {
+          "round": 1,
+          "ticket_id": "TKT-496D2C71",
+          "response_type": "approval",
+          "action": "approved",
+          "ticket_status": "approved"
+        }
+      ],
+      "lifecycle_valid": true,
+      "lifecycle_errors": []
     },
     {
       "id": "AP-B03",
       "complexity": "simple",
       "process_type": "price_variance",
       "scenario": "Price variance credit memo",
-      "status": "resolved",
-      "cost_usd": 0.503842,
-      "input_tokens": 44290,
-      "output_tokens": 5134,
-      "cache_read_tokens": 490960,
-      "invocations": 2
+      "status": "complete",
+      "cost_usd": 0.495009,
+      "input_tokens": 28,
+      "output_tokens": 6216,
+      "cache_read_tokens": 365292,
+      "invocations": 2,
+      "ticket_actions": [
+        {
+          "round": 1,
+          "ticket_id": "TKT-A376EC5C",
+          "response_type": "approval",
+          "action": "approved",
+          "ticket_status": "approved"
+        }
+      ],
+      "lifecycle_valid": true,
+      "lifecycle_errors": []
     },
     {
       "id": "AP-B04",
       "complexity": "simple",
       "process_type": "price_variance",
       "scenario": "Large price variance 15%",
-      "status": "resolved",
-      "cost_usd": 0.521093,
-      "input_tokens": 43902,
-      "output_tokens": 4918,
-      "cache_read_tokens": 499489,
-      "invocations": 2
+      "status": "complete",
+      "cost_usd": 0.565405,
+      "input_tokens": 30,
+      "output_tokens": 7356,
+      "cache_read_tokens": 421634,
+      "invocations": 2,
+      "ticket_actions": [
+        {
+          "round": 1,
+          "ticket_id": "TKT-9E254BB9",
+          "response_type": "approval",
+          "action": "approved",
+          "ticket_status": "approved"
+        }
+      ],
+      "lifecycle_valid": true,
+      "lifecycle_errors": []
     },
     {
       "id": "AP-B05",
       "complexity": "simple",
       "process_type": "price_variance",
       "scenario": "Minimal price variance $10",
-      "status": "processing",
-      "cost_usd": 0.0,
-      "input_tokens": 0,
-      "output_tokens": 0,
-      "cache_read_tokens": 0,
-      "invocations": 0
+      "status": "complete",
+      "cost_usd": 0.325079,
+      "input_tokens": 24,
+      "output_tokens": 5965,
+      "cache_read_tokens": 332172,
+      "invocations": 1,
+      "ticket_actions": [],
+      "lifecycle_valid": true,
+      "lifecycle_errors": []
     },
     {
       "id": "AP-B06",
       "complexity": "simple",
       "process_type": "quantity_variance",
       "scenario": "Over-delivery 10%",
-      "status": "resolved",
-      "cost_usd": 0.729776,
-      "input_tokens": 63697,
-      "output_tokens": 6592,
-      "cache_read_tokens": 918788,
-      "invocations": 2
+      "status": "complete",
+      "cost_usd": 0.801375,
+      "input_tokens": 44,
+      "output_tokens": 14350,
+      "cache_read_tokens": 680238,
+      "invocations": 2,
+      "ticket_actions": [
+        {
+          "round": 1,
+          "ticket_id": "TKT-F1BE23A4",
+          "response_type": "free_text",
+          "action": "replied",
+          "ticket_status": "replied"
+        }
+      ],
+      "lifecycle_valid": true,
+      "lifecycle_errors": []
     },
     {
       "id": "AP-B07",
       "complexity": "simple",
       "process_type": "quantity_variance",
       "scenario": "Under-delivery partial GR",
-      "status": "processing",
-      "cost_usd": 0.206021,
-      "input_tokens": 22773,
-      "output_tokens": 3342,
-      "cache_read_tokens": 202662,
-      "invocations": 1
+      "status": "complete",
+      "cost_usd": 0.311164,
+      "input_tokens": 24,
+      "output_tokens": 5357,
+      "cache_read_tokens": 323052,
+      "invocations": 1,
+      "ticket_actions": [],
+      "lifecycle_valid": true,
+      "lifecycle_errors": []
     },
     {
       "id": "AP-B08",
       "complexity": "simple",
       "process_type": "quantity_variance",
       "scenario": "Qty variance 1 unit",
-      "status": "processing",
-      "cost_usd": 0.209002,
-      "input_tokens": 22328,
-      "output_tokens": 3962,
-      "cache_read_tokens": 181560,
-      "invocations": 1
+      "status": "complete",
+      "cost_usd": 0.251873,
+      "input_tokens": 20,
+      "output_tokens": 3904,
+      "cache_read_tokens": 246726,
+      "invocations": 1,
+      "ticket_actions": [],
+      "lifecycle_valid": true,
+      "lifecycle_errors": []
     },
     {
       "id": "AP-B09",
       "complexity": "simple",
       "process_type": "quantity_variance",
       "scenario": "Large qty shortfall",
-      "status": "processing",
-      "cost_usd": 0.261912,
-      "input_tokens": 26068,
-      "output_tokens": 3937,
-      "cache_read_tokens": 316366,
-      "invocations": 1
+      "status": "complete",
+      "cost_usd": 0.542133,
+      "input_tokens": 32,
+      "output_tokens": 5768,
+      "cache_read_tokens": 440924,
+      "invocations": 2,
+      "ticket_actions": [
+        {
+          "round": 1,
+          "ticket_id": "TKT-A2A7AD7B",
+          "response_type": "approval",
+          "action": "approved",
+          "ticket_status": "approved"
+        }
+      ],
+      "lifecycle_valid": true,
+      "lifecycle_errors": []
     },
     {
       "id": "AP-B10",
@@ -131,95 +201,135 @@
       "process_type": "quantity_variance",
       "scenario": "Qty variance with price match",
       "status": "complete",
-      "cost_usd": 0.297943,
-      "input_tokens": 7126,
-      "output_tokens": 2310,
-      "cache_read_tokens": 318817,
-      "invocations": 1
+      "cost_usd": 0.294815,
+      "input_tokens": 26,
+      "output_tokens": 4734,
+      "cache_read_tokens": 339992,
+      "invocations": 1,
+      "ticket_actions": [],
+      "lifecycle_valid": true,
+      "lifecycle_errors": []
     },
     {
       "id": "AP-B11",
       "complexity": "simple",
       "process_type": "duplicate_invoice",
       "scenario": "Exact duplicate amount",
-      "status": "investigating",
-      "cost_usd": 0.0,
-      "input_tokens": 0,
-      "output_tokens": 0,
-      "cache_read_tokens": 0,
-      "invocations": 0
+      "status": "manual_review_required",
+      "cost_usd": 0.719387,
+      "input_tokens": 30,
+      "output_tokens": 17823,
+      "cache_read_tokens": 579032,
+      "invocations": 1,
+      "ticket_actions": [],
+      "lifecycle_valid": true,
+      "lifecycle_errors": []
     },
     {
       "id": "AP-B12",
       "complexity": "simple",
       "process_type": "duplicate_invoice",
       "scenario": "Near-duplicate off by $1",
-      "status": "processing",
-      "cost_usd": 0.0,
-      "input_tokens": 0,
-      "output_tokens": 0,
-      "cache_read_tokens": 0,
-      "invocations": 0
+      "status": "manual_review_required",
+      "cost_usd": 0.581701,
+      "input_tokens": 30,
+      "output_tokens": 14065,
+      "cache_read_tokens": 482917,
+      "invocations": 1,
+      "ticket_actions": [],
+      "lifecycle_valid": true,
+      "lifecycle_errors": []
     },
     {
       "id": "AP-B13",
       "complexity": "simple",
       "process_type": "duplicate_invoice",
       "scenario": "Duplicate high value",
-      "status": "analyzing",
-      "cost_usd": 0.0,
-      "input_tokens": 0,
-      "output_tokens": 0,
-      "cache_read_tokens": 0,
-      "invocations": 0
+      "status": "manual_review_required",
+      "cost_usd": 0.361936,
+      "input_tokens": 16,
+      "output_tokens": 7304,
+      "cache_read_tokens": 186791,
+      "invocations": 1,
+      "ticket_actions": [],
+      "lifecycle_valid": true,
+      "lifecycle_errors": []
     },
     {
       "id": "AP-B14",
       "complexity": "simple",
       "process_type": "duplicate_invoice",
       "scenario": "Duplicate low value",
-      "status": "resolved",
-      "cost_usd": 0.0,
-      "input_tokens": 0,
-      "output_tokens": 0,
-      "cache_read_tokens": 0,
-      "invocations": 0
+      "status": "complete",
+      "cost_usd": 0.417939,
+      "input_tokens": 28,
+      "output_tokens": 10315,
+      "cache_read_tokens": 390156,
+      "invocations": 1,
+      "ticket_actions": [],
+      "lifecycle_valid": true,
+      "lifecycle_errors": []
     },
     {
       "id": "AP-B15",
       "complexity": "simple",
       "process_type": "duplicate_invoice",
       "scenario": "Duplicate different qty same total",
-      "status": "processing",
-      "cost_usd": 0.259323,
-      "input_tokens": 38107,
-      "output_tokens": 3826,
-      "cache_read_tokens": 167999,
-      "invocations": 1
+      "status": "manual_review_required",
+      "cost_usd": 0.563287,
+      "input_tokens": 26,
+      "output_tokens": 14919,
+      "cache_read_tokens": 391412,
+      "invocations": 1,
+      "ticket_actions": [],
+      "lifecycle_valid": true,
+      "lifecycle_errors": []
     },
     {
       "id": "AP-B16",
       "complexity": "medium",
       "process_type": "three_way_match",
       "scenario": "3-way match price+qty variance",
-      "status": "awaiting_human_input",
-      "cost_usd": 0.167749,
-      "input_tokens": 21933,
-      "output_tokens": 2831,
-      "cache_read_tokens": 123100,
-      "invocations": 1
+      "status": "complete",
+      "cost_usd": 0.623431,
+      "input_tokens": 34,
+      "output_tokens": 8254,
+      "cache_read_tokens": 497140,
+      "invocations": 2,
+      "ticket_actions": [
+        {
+          "round": 1,
+          "ticket_id": "TKT-D12BE49A",
+          "response_type": "approval",
+          "action": "approved",
+          "ticket_status": "approved"
+        }
+      ],
+      "lifecycle_valid": true,
+      "lifecycle_errors": []
     },
     {
       "id": "AP-B17",
       "complexity": "medium",
       "process_type": "three_way_match",
       "scenario": "3-way match GR short",
-      "status": "processing",
-      "cost_usd": 0.0,
-      "input_tokens": 0,
-      "output_tokens": 0,
-      "cache_read_tokens": 0,
-      "invocations": 0
+      "status": "complete",
+      "cost_usd": 0.663561,
+      "input_tokens": 38,
+      "output_tokens": 5830,
+      "cache_read_tokens": 623120,
+      "invocations": 2,
+      "ticket_actions": [
+        {
+          "round": 1,
+          "ticket_id": "TKT-E21F27DC",
+          "response_type": "approval",
+          "action": "approved",
+          "ticket_status": "approved"
+        }
+      ],
+      "lifecycle_valid": true,
+      "lifecycle_errors": []
     },
     {
       "id": "AP-B18",
@@ -227,11 +337,14 @@
       "process_type": "three_way_match",
       "scenario": "3-way match all differ",
       "status": "complete",
-      "cost_usd": 0.30911,
-      "input_tokens": 27419,
-      "output_tokens": 4878,
-      "cache_read_tokens": 388105,
-      "invocations": 1
+      "cost_usd": 0.289464,
+      "input_tokens": 18,
+      "output_tokens": 5132,
+      "cache_read_tokens": 246393,
+      "invocations": 1,
+      "ticket_actions": [],
+      "lifecycle_valid": true,
+      "lifecycle_errors": []
     },
     {
       "id": "AP-B19",
@@ -239,23 +352,37 @@
       "process_type": "three_way_match",
       "scenario": "3-way match minor variance",
       "status": "complete",
-      "cost_usd": 0.0,
-      "input_tokens": 0,
-      "output_tokens": 0,
-      "cache_read_tokens": 0,
-      "invocations": 0
+      "cost_usd": 0.589422,
+      "input_tokens": 30,
+      "output_tokens": 8631,
+      "cache_read_tokens": 419703,
+      "invocations": 2,
+      "ticket_actions": [
+        {
+          "round": 1,
+          "ticket_id": "TKT-D06D4F32",
+          "response_type": "approval",
+          "action": "approved",
+          "ticket_status": "approved"
+        }
+      ],
+      "lifecycle_valid": true,
+      "lifecycle_errors": []
     },
     {
       "id": "AP-B20",
       "complexity": "medium",
       "process_type": "three_way_match",
       "scenario": "3-way match large PO",
-      "status": "processing",
-      "cost_usd": 0.189884,
-      "input_tokens": 21682,
-      "output_tokens": 2995,
-      "cache_read_tokens": 184558,
-      "invocations": 1
+      "status": "complete",
+      "cost_usd": 0.334683,
+      "input_tokens": 24,
+      "output_tokens": 6084,
+      "cache_read_tokens": 339110,
+      "invocations": 1,
+      "ticket_actions": [],
+      "lifecycle_valid": true,
+      "lifecycle_errors": []
     },
     {
       "id": "AP-B21",
@@ -263,95 +390,181 @@
       "process_type": "uom_mismatch",
       "scenario": "UOM mismatch PC vs EA",
       "status": "complete",
-      "cost_usd": 0.289554,
-      "input_tokens": 27846,
-      "output_tokens": 4066,
-      "cache_read_tokens": 368817,
-      "invocations": 1
+      "cost_usd": 0.320566,
+      "input_tokens": 24,
+      "output_tokens": 6059,
+      "cache_read_tokens": 323340,
+      "invocations": 1,
+      "ticket_actions": [],
+      "lifecycle_valid": true,
+      "lifecycle_errors": []
     },
     {
       "id": "AP-B22",
       "complexity": "medium",
       "process_type": "uom_mismatch",
       "scenario": "UOM mismatch with price diff",
-      "status": "awaiting_human_input",
-      "cost_usd": 0.164685,
-      "input_tokens": 20719,
-      "output_tokens": 2439,
-      "cache_read_tokens": 148299,
-      "invocations": 1
+      "status": "complete",
+      "cost_usd": 0.407442,
+      "input_tokens": 28,
+      "output_tokens": 9885,
+      "cache_read_tokens": 393329,
+      "invocations": 1,
+      "ticket_actions": [],
+      "lifecycle_valid": true,
+      "lifecycle_errors": []
     },
     {
       "id": "AP-B23",
       "complexity": "medium",
       "process_type": "uom_mismatch",
       "scenario": "UOM mismatch KG vs LB",
-      "status": "awaiting_human_input",
-      "cost_usd": 0.171585,
-      "input_tokens": 20897,
-      "output_tokens": 2765,
-      "cache_read_tokens": 149211,
-      "invocations": 1
+      "status": "manual_review_required",
+      "cost_usd": 0.635824,
+      "input_tokens": 30,
+      "output_tokens": 12923,
+      "cache_read_tokens": 391626,
+      "invocations": 2,
+      "ticket_actions": [
+        {
+          "round": 1,
+          "ticket_id": "TKT-5039985B",
+          "response_type": "free_text",
+          "action": "replied",
+          "ticket_status": "replied"
+        }
+      ],
+      "lifecycle_valid": true,
+      "lifecycle_errors": []
     },
     {
       "id": "AP-B24",
       "complexity": "medium",
       "process_type": "missing_goods_receipt",
       "scenario": "Missing GR standard PO",
-      "status": "awaiting_human_input",
-      "cost_usd": 0.268485,
-      "input_tokens": 34531,
-      "output_tokens": 3153,
-      "cache_read_tokens": 277150,
-      "invocations": 1
+      "status": "complete",
+      "cost_usd": 0.684153,
+      "input_tokens": 32,
+      "output_tokens": 12990,
+      "cache_read_tokens": 441671,
+      "invocations": 2,
+      "ticket_actions": [
+        {
+          "round": 1,
+          "ticket_id": "TKT-1A2BFD0B",
+          "response_type": "free_text",
+          "action": "replied",
+          "ticket_status": "replied"
+        }
+      ],
+      "lifecycle_valid": true,
+      "lifecycle_errors": []
     },
     {
       "id": "AP-B25",
       "complexity": "medium",
       "process_type": "missing_goods_receipt",
       "scenario": "Missing GR high value",
-      "status": "awaiting_human_input",
-      "cost_usd": 0.184792,
-      "input_tokens": 19269,
-      "output_tokens": 3454,
-      "cache_read_tokens": 170200,
-      "invocations": 1
+      "status": "complete",
+      "cost_usd": 0.921853,
+      "input_tokens": 40,
+      "output_tokens": 14903,
+      "cache_read_tokens": 534281,
+      "invocations": 3,
+      "ticket_actions": [
+        {
+          "round": 1,
+          "ticket_id": "TKT-6892D9D8",
+          "response_type": "free_text",
+          "action": "replied",
+          "ticket_status": "replied"
+        },
+        {
+          "round": 2,
+          "ticket_id": "TKT-F67E88FC",
+          "response_type": "free_text",
+          "action": "replied",
+          "ticket_status": "replied"
+        }
+      ],
+      "lifecycle_valid": true,
+      "lifecycle_errors": []
     },
     {
       "id": "AP-B26",
       "complexity": "medium",
       "process_type": "missing_goods_receipt",
       "scenario": "Missing GR with price variance",
-      "status": "awaiting_human_input",
-      "cost_usd": 0.226399,
-      "input_tokens": 30434,
-      "output_tokens": 2881,
-      "cache_read_tokens": 205176,
-      "invocations": 1
+      "status": "complete",
+      "cost_usd": 1.150716,
+      "input_tokens": 54,
+      "output_tokens": 16043,
+      "cache_read_tokens": 932909,
+      "invocations": 3,
+      "ticket_actions": [
+        {
+          "round": 1,
+          "ticket_id": "TKT-284E9FFE",
+          "response_type": "free_text",
+          "action": "replied",
+          "ticket_status": "replied"
+        },
+        {
+          "round": 2,
+          "ticket_id": "TKT-C55BEC90",
+          "response_type": "approval",
+          "action": "approved",
+          "ticket_status": "approved"
+        }
+      ],
+      "lifecycle_valid": true,
+      "lifecycle_errors": []
     },
     {
       "id": "AP-B27",
       "complexity": "medium",
       "process_type": "missing_goods_receipt",
       "scenario": "Missing GR low value",
-      "status": "awaiting_human_input",
-      "cost_usd": 0.167481,
-      "input_tokens": 18860,
-      "output_tokens": 2950,
-      "cache_read_tokens": 148619,
-      "invocations": 1
+      "status": "complete",
+      "cost_usd": 0.811715,
+      "input_tokens": 44,
+      "output_tokens": 14799,
+      "cache_read_tokens": 752127,
+      "invocations": 2,
+      "ticket_actions": [
+        {
+          "round": 1,
+          "ticket_id": "TKT-04BBFA67",
+          "response_type": "free_text",
+          "action": "replied",
+          "ticket_status": "replied"
+        }
+      ],
+      "lifecycle_valid": true,
+      "lifecycle_errors": []
     },
     {
       "id": "AP-B28",
       "complexity": "medium",
       "process_type": "missing_goods_receipt",
       "scenario": "Missing GR multi-line qty",
-      "status": "awaiting_human_input",
-      "cost_usd": 0.316888,
-      "input_tokens": 31533,
-      "output_tokens": 3852,
-      "cache_read_tokens": 433117,
-      "invocations": 1
+      "status": "complete",
+      "cost_usd": 0.626602,
+      "input_tokens": 30,
+      "output_tokens": 12012,
+      "cache_read_tokens": 412937,
+      "invocations": 2,
+      "ticket_actions": [
+        {
+          "round": 1,
+          "ticket_id": "TKT-0F8ED9D4",
+          "response_type": "free_text",
+          "action": "replied",
+          "ticket_status": "replied"
+        }
+      ],
+      "lifecycle_valid": true,
+      "lifecycle_errors": []
     },
     {
       "id": "AP-B29",
@@ -359,23 +572,29 @@
       "process_type": "invoice_matching",
       "scenario": "Invoice match partial delivery",
       "status": "complete",
-      "cost_usd": 0.277199,
-      "input_tokens": 27728,
-      "output_tokens": 4267,
-      "cache_read_tokens": 327434,
-      "invocations": 1
+      "cost_usd": 0.387961,
+      "input_tokens": 28,
+      "output_tokens": 7338,
+      "cache_read_tokens": 422541,
+      "invocations": 1,
+      "ticket_actions": [],
+      "lifecycle_valid": true,
+      "lifecycle_errors": []
     },
     {
       "id": "AP-B30",
       "complexity": "medium",
       "process_type": "invoice_matching",
       "scenario": "Invoice match over-invoiced",
-      "status": "awaiting_human_input",
-      "cost_usd": 0.169731,
-      "input_tokens": 21242,
-      "output_tokens": 3236,
-      "cache_read_tokens": 107120,
-      "invocations": 1
+      "status": "complete",
+      "cost_usd": 0.337213,
+      "input_tokens": 26,
+      "output_tokens": 5744,
+      "cache_read_tokens": 368319,
+      "invocations": 1,
+      "ticket_actions": [],
+      "lifecycle_valid": true,
+      "lifecycle_errors": []
     },
     {
       "id": "AP-B31",
@@ -383,11 +602,14 @@
       "process_type": "invoice_matching",
       "scenario": "Invoice match exact but blocked",
       "status": "complete",
-      "cost_usd": 0.229361,
-      "input_tokens": 25598,
-      "output_tokens": 2950,
-      "cache_read_tokens": 264150,
-      "invocations": 1
+      "cost_usd": 0.323321,
+      "input_tokens": 22,
+      "output_tokens": 6415,
+      "cache_read_tokens": 303588,
+      "invocations": 1,
+      "ticket_actions": [],
+      "lifecycle_valid": true,
+      "lifecycle_errors": []
     },
     {
       "id": "AP-B32",
@@ -395,227 +617,371 @@
       "process_type": "invoice_matching",
       "scenario": "Invoice match rounding diff",
       "status": "complete",
-      "cost_usd": 0.215224,
-      "input_tokens": 1531,
-      "output_tokens": 471,
-      "cache_read_tokens": 94026,
-      "invocations": 1
+      "cost_usd": 0.322593,
+      "input_tokens": 22,
+      "output_tokens": 6203,
+      "cache_read_tokens": 300060,
+      "invocations": 1,
+      "ticket_actions": [],
+      "lifecycle_valid": true,
+      "lifecycle_errors": []
     },
     {
       "id": "AP-B33",
       "complexity": "medium",
       "process_type": "invoice_matching",
       "scenario": "Invoice match large variance",
-      "status": "awaiting_human_input",
-      "cost_usd": 0.186501,
-      "input_tokens": 21395,
-      "output_tokens": 3234,
-      "cache_read_tokens": 163208,
-      "invocations": 1
+      "status": "complete",
+      "cost_usd": 0.673504,
+      "input_tokens": 36,
+      "output_tokens": 8124,
+      "cache_read_tokens": 539749,
+      "invocations": 2,
+      "ticket_actions": [
+        {
+          "round": 1,
+          "ticket_id": "TKT-B5C9D41F",
+          "response_type": "approval",
+          "action": "approved",
+          "ticket_status": "approved"
+        }
+      ],
+      "lifecycle_valid": true,
+      "lifecycle_errors": []
     },
     {
       "id": "AP-B34",
       "complexity": "medium",
       "process_type": "invoice_matching",
       "scenario": "Invoice match credit scenario",
-      "status": "processing",
-      "cost_usd": 0.0,
-      "input_tokens": 0,
-      "output_tokens": 0,
-      "cache_read_tokens": 0,
-      "invocations": 0
+      "status": "complete",
+      "cost_usd": 0.973722,
+      "input_tokens": 42,
+      "output_tokens": 11610,
+      "cache_read_tokens": 624751,
+      "invocations": 3,
+      "ticket_actions": [
+        {
+          "round": 1,
+          "ticket_id": "TKT-169D79DC",
+          "response_type": "approval",
+          "action": "approved",
+          "ticket_status": "approved"
+        },
+        {
+          "round": 2,
+          "ticket_id": "TKT-E86233A7",
+          "response_type": "approval",
+          "action": "approved",
+          "ticket_status": "approved"
+        }
+      ],
+      "lifecycle_valid": true,
+      "lifecycle_errors": []
     },
     {
       "id": "AP-B35",
       "complexity": "escalation",
       "process_type": "missing_purchase_order",
       "scenario": "Missing PO standard invoice",
-      "status": "awaiting_human_input",
-      "cost_usd": 0.287603,
-      "input_tokens": 34779,
-      "output_tokens": 3895,
-      "cache_read_tokens": 293289,
-      "invocations": 1
+      "status": "complete",
+      "cost_usd": 0.516496,
+      "input_tokens": 28,
+      "output_tokens": 13222,
+      "cache_read_tokens": 457940,
+      "invocations": 1,
+      "ticket_actions": [],
+      "lifecycle_valid": true,
+      "lifecycle_errors": []
     },
     {
       "id": "AP-B36",
       "complexity": "escalation",
       "process_type": "missing_purchase_order",
       "scenario": "Missing PO high value",
-      "status": "manual_review_required",
-      "cost_usd": 0.161311,
-      "input_tokens": 21889,
-      "output_tokens": 2399,
-      "cache_read_tokens": 123355,
-      "invocations": 1
+      "status": "complete",
+      "cost_usd": 0.388919,
+      "input_tokens": 26,
+      "output_tokens": 8913,
+      "cache_read_tokens": 359695,
+      "invocations": 1,
+      "ticket_actions": [],
+      "lifecycle_valid": true,
+      "lifecycle_errors": []
     },
     {
       "id": "AP-B37",
       "complexity": "escalation",
       "process_type": "missing_purchase_order",
       "scenario": "Missing PO with variance",
-      "status": "awaiting_human_input",
-      "cost_usd": 0.262142,
-      "input_tokens": 30010,
-      "output_tokens": 4076,
-      "cache_read_tokens": 258057,
-      "invocations": 1
+      "status": "manual_review_required",
+      "cost_usd": 0.391682,
+      "input_tokens": 30,
+      "output_tokens": 7683,
+      "cache_read_tokens": 427507,
+      "invocations": 1,
+      "ticket_actions": [],
+      "lifecycle_valid": true,
+      "lifecycle_errors": []
     },
     {
       "id": "AP-B38",
       "complexity": "escalation",
       "process_type": "ap_exception",
       "scenario": "Generic AP exception blocked",
-      "status": "awaiting_human_input",
-      "cost_usd": 0.251241,
-      "input_tokens": 25338,
-      "output_tokens": 4268,
-      "cache_read_tokens": 265421,
-      "invocations": 1
+      "status": "manual_review_required",
+      "cost_usd": 0.474815,
+      "input_tokens": 30,
+      "output_tokens": 10199,
+      "cache_read_tokens": 485318,
+      "invocations": 1,
+      "ticket_actions": [],
+      "lifecycle_valid": true,
+      "lifecycle_errors": []
     },
     {
       "id": "AP-B39",
       "complexity": "escalation",
       "process_type": "ap_exception",
       "scenario": "AP exception price+qty",
-      "status": "awaiting_human_input",
-      "cost_usd": 0.189205,
-      "input_tokens": 2061,
-      "output_tokens": 1159,
-      "cache_read_tokens": 106759,
-      "invocations": 1
+      "status": "complete",
+      "cost_usd": 0.333447,
+      "input_tokens": 24,
+      "output_tokens": 6131,
+      "cache_read_tokens": 336690,
+      "invocations": 1,
+      "ticket_actions": [],
+      "lifecycle_valid": true,
+      "lifecycle_errors": []
     },
     {
       "id": "AP-B40",
       "complexity": "escalation",
       "process_type": "ap_exception",
       "scenario": "AP exception missing GR high",
-      "status": "awaiting_human_input",
-      "cost_usd": 0.213243,
-      "input_tokens": 24982,
-      "output_tokens": 3413,
-      "cache_read_tokens": 197696,
-      "invocations": 1
+      "status": "complete",
+      "cost_usd": 0.388965,
+      "input_tokens": 26,
+      "output_tokens": 8294,
+      "cache_read_tokens": 389725,
+      "invocations": 1,
+      "ticket_actions": [],
+      "lifecycle_valid": true,
+      "lifecycle_errors": []
     },
     {
       "id": "AP-B41",
       "complexity": "escalation",
       "process_type": "ap_exception",
       "scenario": "AP exception small blocked",
-      "status": "awaiting_human_input",
-      "cost_usd": 0.191652,
-      "input_tokens": 22309,
-      "output_tokens": 3048,
-      "cache_read_tokens": 179653,
-      "invocations": 1
+      "status": "complete",
+      "cost_usd": 0.473077,
+      "input_tokens": 30,
+      "output_tokens": 11045,
+      "cache_read_tokens": 475485,
+      "invocations": 1,
+      "ticket_actions": [],
+      "lifecycle_valid": true,
+      "lifecycle_errors": []
     },
     {
       "id": "AP-B42",
       "complexity": "escalation",
       "process_type": "three_way_match",
       "scenario": "3-way escalation large variance",
-      "status": "awaiting_human_input",
-      "cost_usd": 0.17664,
-      "input_tokens": 22718,
-      "output_tokens": 2815,
-      "cache_read_tokens": 145863,
-      "invocations": 1
+      "status": "complete",
+      "cost_usd": 0.588017,
+      "input_tokens": 34,
+      "output_tokens": 6940,
+      "cache_read_tokens": 499654,
+      "invocations": 2,
+      "ticket_actions": [
+        {
+          "round": 1,
+          "ticket_id": "TKT-60539741",
+          "response_type": "approval",
+          "action": "approved",
+          "ticket_status": "approved"
+        }
+      ],
+      "lifecycle_valid": true,
+      "lifecycle_errors": []
     },
     {
       "id": "AP-B43",
       "complexity": "escalation",
       "process_type": "three_way_match",
       "scenario": "3-way escalation missing GR",
-      "status": "processing",
-      "cost_usd": 0.0,
-      "input_tokens": 0,
-      "output_tokens": 0,
-      "cache_read_tokens": 0,
-      "invocations": 0
+      "status": "complete",
+      "cost_usd": 0.727987,
+      "input_tokens": 36,
+      "output_tokens": 12964,
+      "cache_read_tokens": 549461,
+      "invocations": 2,
+      "ticket_actions": [
+        {
+          "round": 1,
+          "ticket_id": "TKT-93FEF937",
+          "response_type": "free_text",
+          "action": "replied",
+          "ticket_status": "replied"
+        }
+      ],
+      "lifecycle_valid": true,
+      "lifecycle_errors": []
     },
     {
       "id": "AP-B44",
       "complexity": "escalation",
       "process_type": "price_variance",
       "scenario": "Price escalation 25% over",
-      "status": "awaiting_human_input",
-      "cost_usd": 0.155051,
-      "input_tokens": 17829,
-      "output_tokens": 2603,
-      "cache_read_tokens": 140988,
-      "invocations": 1
+      "status": "manual_review_required",
+      "cost_usd": 0.445231,
+      "input_tokens": 20,
+      "output_tokens": 7103,
+      "cache_read_tokens": 230929,
+      "invocations": 2,
+      "ticket_actions": [
+        {
+          "round": 1,
+          "ticket_id": "TKT-A91E2328",
+          "response_type": "approval",
+          "action": "denied",
+          "ticket_status": "denied"
+        }
+      ],
+      "lifecycle_valid": true,
+      "lifecycle_errors": []
     },
     {
       "id": "AP-B45",
       "complexity": "escalation",
       "process_type": "price_variance",
-      "scenario": "Price escalation high value",
-      "status": "awaiting_human_input",
-      "cost_usd": 0.17615,
-      "input_tokens": 20230,
-      "output_tokens": 2871,
-      "cache_read_tokens": 165180,
-      "invocations": 1
+      "scenario": "Price escalation high value approval",
+      "status": "complete",
+      "cost_usd": 0.540035,
+      "input_tokens": 30,
+      "output_tokens": 6977,
+      "cache_read_tokens": 408355,
+      "invocations": 2,
+      "ticket_actions": [
+        {
+          "round": 1,
+          "ticket_id": "TKT-2B27D424",
+          "response_type": "approval",
+          "action": "approved",
+          "ticket_status": "approved"
+        }
+      ],
+      "lifecycle_valid": true,
+      "lifecycle_errors": []
     },
     {
       "id": "AP-B46",
       "complexity": "escalation",
       "process_type": "invoice_matching",
       "scenario": "Invoice escalation 50% over",
-      "status": "awaiting_human_input",
-      "cost_usd": 0.201117,
-      "input_tokens": 22637,
-      "output_tokens": 3363,
-      "cache_read_tokens": 188028,
-      "invocations": 1
+      "status": "complete",
+      "cost_usd": 0.5701,
+      "input_tokens": 32,
+      "output_tokens": 6847,
+      "cache_read_tokens": 464535,
+      "invocations": 2,
+      "ticket_actions": [
+        {
+          "round": 1,
+          "ticket_id": "TKT-6E67BCAB",
+          "response_type": "approval",
+          "action": "approved",
+          "ticket_status": "approved"
+        }
+      ],
+      "lifecycle_valid": true,
+      "lifecycle_errors": []
     },
     {
       "id": "AP-B47",
       "complexity": "escalation",
       "process_type": "invoice_matching",
       "scenario": "Invoice escalation no GR",
-      "status": "awaiting_human_input",
-      "cost_usd": 0.257115,
-      "input_tokens": 24152,
-      "output_tokens": 4076,
-      "cache_read_tokens": 310550,
-      "invocations": 1
+      "status": "manual_review_required",
+      "cost_usd": 0.665672,
+      "input_tokens": 30,
+      "output_tokens": 14605,
+      "cache_read_tokens": 424670,
+      "invocations": 2,
+      "ticket_actions": [
+        {
+          "round": 1,
+          "ticket_id": "TKT-108C0392",
+          "response_type": "free_text",
+          "action": "replied",
+          "ticket_status": "replied"
+        }
+      ],
+      "lifecycle_valid": true,
+      "lifecycle_errors": []
     },
     {
       "id": "AP-B48",
       "complexity": "escalation",
       "process_type": "quantity_variance",
       "scenario": "Qty escalation 50% short",
-      "status": "awaiting_human_input",
-      "cost_usd": 0.210801,
-      "input_tokens": 24994,
-      "output_tokens": 3381,
-      "cache_read_tokens": 189731,
-      "invocations": 1
+      "status": "complete",
+      "cost_usd": 0.502501,
+      "input_tokens": 28,
+      "output_tokens": 6250,
+      "cache_read_tokens": 359579,
+      "invocations": 2,
+      "ticket_actions": [
+        {
+          "round": 1,
+          "ticket_id": "TKT-82A60F2D",
+          "response_type": "approval",
+          "action": "approved",
+          "ticket_status": "approved"
+        }
+      ],
+      "lifecycle_valid": true,
+      "lifecycle_errors": []
     },
     {
       "id": "AP-B49",
       "complexity": "escalation",
       "process_type": "missing_goods_receipt",
       "scenario": "Missing GR escalation high",
-      "status": "awaiting_human_input",
-      "cost_usd": 0.190614,
-      "input_tokens": 22489,
-      "output_tokens": 3175,
-      "cache_read_tokens": 172179,
-      "invocations": 1
+      "status": "manual_review_required",
+      "cost_usd": 0.5114,
+      "input_tokens": 26,
+      "output_tokens": 10766,
+      "cache_read_tokens": 303355,
+      "invocations": 2,
+      "ticket_actions": [
+        {
+          "round": 1,
+          "ticket_id": "TKT-57481FF5",
+          "response_type": "free_text",
+          "action": "replied",
+          "ticket_status": "replied"
+        }
+      ],
+      "lifecycle_valid": true,
+      "lifecycle_errors": []
     },
     {
       "id": "AP-B50",
       "complexity": "escalation",
       "process_type": "missing_purchase_order",
       "scenario": "Missing PO escalation complex",
-      "status": "awaiting_human_input",
-      "cost_usd": 0.214081,
-      "input_tokens": 20858,
-      "output_tokens": 4098,
-      "cache_read_tokens": 209115,
-      "invocations": 1
+      "status": "complete",
+      "cost_usd": 0.438946,
+      "input_tokens": 30,
+      "output_tokens": 9719,
+      "cache_read_tokens": 457327,
+      "invocations": 1,
+      "ticket_actions": [],
+      "lifecycle_valid": true,
+      "lifecycle_errors": []
     }
   ]
 }

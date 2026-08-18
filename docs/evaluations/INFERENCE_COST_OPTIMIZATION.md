@@ -17,7 +17,8 @@ For Knowledge Base infrastructure cost (now S3 Vectors pay-per-use), see [KB Cos
 |--------|-------|
 | Model | Claude Sonnet 4 (single-agent, all turns) |
 | Avg cost per case | $0.26 |
-| Avg cache read tokens | 250K/invocation |
+| Avg cache read tokens | 221K/invocation — summed over its 5–7 turns, not the prompt size |
+| Assembled system prompt | 4.2K–5.0K tokens (persona + platform mechanics + routed SOP) |
 | Avg turns per invocation | ~5–7 |
 | Multi-agent mode | Built but disabled (`multi_agent: false`) |
 | Exemplars | Infrastructure exists, content not generated |
@@ -76,11 +77,13 @@ Run the AP cost benchmark with `multi_agent: true` and compare accuracy scores a
 **Savings: 20–30% fewer tokens per case | Effort: 1–2 days**
 
 The exemplar infrastructure is fully wired:
-- `_fetch_exemplars()` in `agentcore/agent/utils/skill_router.py` loads `{skill_id}/{process_type}_exemplars.md` from S3 and appends them to the system prompt
+- `exemplar_s3_key()` / `_fetch_exemplars()` in `agentcore/agent/utils/skill_router.py` load `{skill_id}/{process_type}_exemplars.md` from the exemplars bucket (`EXEMPLAR_BUCKET`) and append them to the system prompt
 - `lambdas/exemplar_builder/` generates exemplars from successful case traces
 - [ADR-005](../design-decisions/005-cost-optimization-model-routing.md) describes the design
 
 But exemplar content hasn't been generated for most process types yet.
+
+The writer and reader disagreed on that key once — the builder wrote one prefix, the router read another, and `_fetch_exemplars` swallowed the resulting 404 as "no exemplars yet," so a generated file looked identical to a missing one. Both sides now derive the key from the same format and `tests/unit/test_exemplar_key_parity.py` pins them byte-for-byte. If exemplars appear to have no effect, check that test before assuming the content is at fault.
 
 ### Why Exemplars Reduce Cost
 
@@ -93,7 +96,7 @@ Fewer turns = fewer input/output tokens = lower cost.
 1. Run 5–10 successful cases per process type through the benchmark
 2. Extract tool call sequences from the `agent_traces` in DynamoDB
 3. Format as condensed exemplars showing: exception type → tool calls → outcome
-4. Upload to S3 at `sops/{skill_id}/{process_type}_exemplars.md`
+4. Upload to the exemplars bucket at `{skill_id}/{process_type}_exemplars.md` — or better, let `exemplar_s3_key()` build the key, since a hand-typed one is what broke this before. Never the SOP bucket: the SOPs knowledge base ingests all of it, and a `search_sap_sops` hit on an LLM-condensed trace is indistinguishable from an authored SOP.
 5. The skill router picks them up automatically on next invocation
 
 The `exemplar_builder` Lambda can automate steps 2–4. Run it via EventBridge or manually:
@@ -108,29 +111,32 @@ aws lambda invoke --function-name {stack}-exemplar-builder \
 
 Exemplars + Haiku orchestration compound: Haiku follows demonstrated patterns even more reliably than Sonnet follows exploratory reasoning. The combination could push per-case cost under $0.10.
 
-## Optimization 3: Compress SOPs
+## Optimization 3: Scope the Tool Results, Not the SOP
 
-**Savings: 10–20% of cache costs | Effort: Content editing**
+**Savings: the bulk of the ~221K cache reads | Effort: prompt guidance (shipped) + SOP audit**
 
-The benchmark shows ~250K cache read tokens per invocation — the system prompt + SOP content. Even at the cache read rate ($0.30/M for Sonnet, $0.08/M for Haiku), this is a meaningful cost component:
+The benchmark shows ~221K cache read tokens per invocation. It is tempting to read that as a 221K prompt and go compress SOPs — that is the wrong target. The assembled system prompt (persona + shared platform mechanics + routed SOP) measures **4.5K–5.2K tokens**:
 
-| Model | Cache read cost per invocation (250K tokens) |
+```python
+# PYTHONPATH=agentcore/agent
+from utils import skill_router as sr
+len(sr.resolve_skill("quantity_variance")["system_prompt"])  # ~18K chars ≈ 4.5K tokens
+```
+
+221K is the **sum over the invocation's 5–7 turns** of the whole cached prefix. The prompt is a small, fixed part of it; the growth is the conversation, and the conversation is mostly **tool results**. A single `odata_read` of `A_SupplierInvoice` without `select` returns 100+ fields, stays in context, and is re-read on every subsequent turn — so one unscoped read is billed five to seven times.
+
+### What to Do
+
+- **Scope every read.** `select` naming only the needed fields, `top` whenever not reading by key, `odata_count` instead of reading rows to count them, `expand` only when the related rows are needed this turn. This guidance now ships in `skills/_platform_prompt.txt` (SAP READS) so it reaches every skill.
+- **Name all the fields a comparison needs in one call.** Two narrow reads cost more than one correctly-scoped read.
+- **Then** audit SOPs — but for correctness and redundant inline examples, not for byte count. At ~1–3K tokens of SOP per case, a 30% prose cut saves under $0.0005 per invocation on Sonnet. It is not a cost lever.
+
+| Model | Cache read cost per invocation (221K tokens) |
 |-------|----------------------------------------------|
-| Sonnet | $0.075 |
-| Haiku | $0.020 |
+| Sonnet | $0.066 |
+| Haiku | $0.018 |
 
-### What to Compress
-
-Audit SOPs for:
-- **Repeated boilerplate** — error handling, escalation paths, and notification templates that appear in every SOP. Extract into a shared preamble loaded once.
-- **Verbose prose** — SOPs written for human readers often include explanatory context the agent doesn't need. Convert to structured step lists.
-- **Redundant examples** — if exemplars (Optimization 2) provide tool call demonstrations, the SOP doesn't need inline examples.
-
-A 30% reduction in SOP size (250K → 175K tokens) saves ~$0.02/invocation on Sonnet or ~$0.006/invocation on Haiku. Small per-case, but meaningful at volume.
-
-### Cache Write Impact
-
-Shorter SOPs also reduce the cache write cost on the first turn of each new cache window. At $3.75/M (Sonnet) or $1.00/M (Haiku), the first-turn write for 250K tokens costs $0.94 (Sonnet) or $0.25 (Haiku). A 30% reduction saves $0.28 or $0.075 per cache window.
+Halving accumulated tool-result size roughly halves that line — two orders of magnitude more than SOP compression can reach.
 
 ## Optimization 4: Remove Redundant KB Searches
 
@@ -140,7 +146,11 @@ The skill router already injects the correct SOP into the system prompt at runti
 
 ### Fix
 
-Remove `search_sap_sops` from `gateway_tools` in skill configs where the injected SOP is sufficient. Keep the OData-discovery tools (`find_sap_services`, `get_metadata`, `get_service_hints`, `search_sap_api_docs`), which genuinely require search.
+Every tool in `gateway_tools` costs its JSON schema on every model request, called or not. Drop the grants nothing reaches for. `get_service_hints` was declared by both skills and named by no prompt or SOP, and `example_finance_accruals` declared `demo_update_ticket`/`demo_list_tickets` while its ticket protocol only creates and reads — all three are now gone from the shipped configs.
+
+Keep `search_sap_sops`: the router injects the routed SOP, `load_sop` handles cross-SOP jumps, and `search_sap_sops` answers questions the loaded SOP does not. Keep `find_sap_services`/`get_metadata` too — they are the deliberate fallback when a pinned service name turns out wrong, and `get_metadata` is required before any `odata_function_import` to retrieve the parameter list. Keep `search_sap_api_docs` ([ADR-002](../design-decisions/002-two-layer-sap-api-knowledge.md) Layer 1).
+
+The check: grep the skill's prompt and SOPs for each granted tool name. A tool no instruction mentions and no failure path needs is schema you pay for on every request.
 
 ```json
 {
@@ -154,7 +164,7 @@ Remove `search_sap_sops` from `gateway_tools` in skill configs where the injecte
     "odata_function_import",
     "find_sap_services",
     "get_metadata",
-    "get_service_hints",
+    "search_sap_sops",
     "search_sap_api_docs",
     "send_notification"
   ]
@@ -163,7 +173,7 @@ Remove `search_sap_sops` from `gateway_tools` in skill configs where the injecte
 
 (SAP OData access is provided by the external AWS for SAP MCP server via the `odata_*` / `*_sap_*` gateway tools above; there are no homegrown `sap_read`/`sap_write` tools.)
 
-Each removed tool call saves a Gateway round-trip (~2s latency) and the associated input/output tokens for the tool result. At 1–2 fewer calls per case, this is a modest but free improvement.
+Dropping a grant saves its schema on every request; a call the agent no longer makes also saves a Gateway round-trip (~2s) and the tokens of its result on every later turn. Both are small per case, free at the config layer.
 
 ## Optimization 5: Per-Process-Type Model Tier
 
@@ -194,7 +204,7 @@ Extend the skill config to support a per-process-type model-tier override map, w
 
 Bedrock IPR routes each request within a model family to Haiku or Sonnet based on prompt complexity. Available as `"model_tier": "ipr-anthropic"` in skill configs ([ADR-005](../design-decisions/005-cost-optimization-model-routing.md)).
 
-**Why it's listed last:** IPR evaluates the prompt text to decide complexity. Our system prompts always include a large SOP document (~200K tokens), so IPR will likely classify most requests as complex and pick Sonnet anyway. The explicit multi-agent split (Optimization 1) gives more predictable savings because the routing decision is structural, not heuristic.
+**Why it's listed last:** IPR evaluates the prompt text to decide complexity. Every queued request carries a whole SOP and the platform mechanics, so most will classify as complex and pick Sonnet anyway — not because the prompt is huge (it is 4.2K–5.0K tokens, per Optimization 3) but because procedural multi-step instructions read as complex regardless of length. The explicit multi-agent split (Optimization 1) gives more predictable savings because the routing decision is structural, not heuristic.
 
 IPR may be more effective for chat-mode interactions (no SOP in context) where prompt complexity genuinely varies.
 
@@ -279,7 +289,7 @@ The per-request infrastructure (AgentCore Runtime + Gateway + Memory + Policy, L
 |---|---|---|---|---|
 | 1 | Enable multi-agent (Haiku orchestrator) | Config + validation | 50–70% | ~$0.10–0.15 |
 | 2 | Generate exemplars | 1–2 days | 20–30% fewer tokens | ~$0.08–0.12 |
-| 3 | Compress SOPs | Content editing | 10–20% cache costs | ~$0.07–0.11 |
+| 3 | Scope the tool results | Prompt guidance (shipped) + SOP audit | Most of the cache-read line | ~$0.07–0.11 |
 | 4 | Remove redundant KB searches | Config change | 1–2 fewer tool calls | ~$0.07–0.10 |
 | 5 | Per-process-type model tier | Feature work | Cheaper tier on eligible types | ~$0.05–0.08 |
 | 6 | Bedrock IPR | Config change | Variable (may not help) | — |

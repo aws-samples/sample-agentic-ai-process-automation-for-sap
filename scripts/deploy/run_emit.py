@@ -43,6 +43,7 @@ from emit_resolved_profile import ARTIFACT_FILENAME, emit_resolved_profile  # no
 from utils.auth_profiles import (  # noqa: E402
     load_catalog,
     resolve_profile,
+    stub_blockers,
     stubbed_axes,
     validate_profile,
 )
@@ -71,12 +72,21 @@ _PLACEHOLDER_MCP_URL = "https://example-mcp.invalid/mcp"
 
 
 def _outbound_block(
-    profile, mcp_invocation_url: str = _PLACEHOLDER_MCP_URL
+    profile,
+    mcp_invocation_url: str = _PLACEHOLDER_MCP_URL,
+    *,
+    mcp_path: bool = False,
 ) -> dict | None:
     """Derive the SAP MCP target-variant flags from the resolved outbound axis.
 
-    Returns None for the no-op `basic` flow (no SAP MCP target). Otherwise returns
-    {flow, service_enabled, user_enabled, issuer_type}. Mapping:
+    Returns None for the `basic` flow when sap_mcp is disabled (no SAP MCP target
+    needed). When mcp_path is True (sap_mcp.enabled), BASIC emits a block with
+    service_enabled=True so the external SAP MCP Service Gateway target is retained
+    — BASIC describes the external MCP-to-SAP hop (service-account Basic Auth); the
+    Gateway-to-external-runtime leg still uses OAuth2 client credentials.
+
+    For non-basic flows returns {flow, service_enabled, user_enabled, issuer_type}.
+    Mapping:
       M2M                       -> Service target
       USER_FEDERATION / OBO     -> User target
 
@@ -90,7 +100,18 @@ def _outbound_block(
     meta = profile.axis_meta["outbound"]
     flow = meta.get("mcp_oauth_flow")
     if flow == "BASIC":
-        return None
+        if not mcp_path:
+            return None
+        # When the SAP MCP path is enabled, BASIC still needs a service target —
+        # the Gateway dials the external runtime with OAuth2 client credentials,
+        # and the external runtime uses Basic Auth toward SAP. Emit the block so
+        # resolveOutboundProfile() sees service_enabled=true.
+        return {
+            "flow": "BASIC",
+            "service_enabled": True,
+            "user_enabled": False,
+            "issuer_type": None,
+        }
     block = {
         "flow": flow,
         "service_enabled": flow == "M2M",
@@ -151,9 +172,21 @@ def _cdk_only_axes(profile, catalog) -> list[str]:
             f"outbound '{profile.outbound}' (flow {out_flow}) needs the SAP MCP "
             "adapter — CDK-only, no Terraform module"
         )
-    if _mode_block(profile, catalog) is not None:
+    if _mode_requires_cdk(profile, catalog):
         reasons.append(
             f"mode {list(profile.mode)} includes 'batch' — the batch runner is CDK-only"
+        )
+    if "autonomous" not in profile.mode:
+        # The inverse of the batch case: not something Terraform lacks a module for,
+        # but something it cannot *withhold*. CDK reads the mode list and skips the
+        # poller schedule, SQS queue and invoker for a live-only profile
+        # (shouldProvisionAutonomous in backend-stack.ts). Terraform wires that
+        # pipeline unconditionally, so a live-only profile would deploy an
+        # autonomous path with no structurally possible caller. Fail loud instead.
+        reasons.append(
+            f"mode {list(profile.mode)} omits 'autonomous' — Terraform always wires "
+            "the poller + SQS + invoker, which that profile can never trigger; only "
+            "CDK can withhold them"
         )
     fe_issuer = profile.axis_meta["frontend"].get("issuer")
     if fe_issuer not in (None, "cognito"):
@@ -164,22 +197,44 @@ def _cdk_only_axes(profile, catalog) -> list[str]:
     return reasons
 
 
-def _mode_block(profile, catalog) -> dict | None:
-    """Derive the batch-runner flag from the resolved mode LIST.
+def _mode_requires_cdk(profile, catalog) -> bool:
+    """True when a selected mode value declares an iac_module, i.e. the mode axis
+    provisions infrastructure only CDK can build (today: batch → mode/batch-runner).
 
-    Scans profile.mode (not axis_meta["mode"], which holds only the last value's
-    meta). Returns None when no selected mode value declares an iac_module
-    (autonomous / live only — constraint-only, nothing to provision). Otherwise
-    {modes, batch_runner_enabled, requires_refresh}. Discriminator = iac_module
-    presence, read from the catalog, not the value name."""
+    Split out of _mode_block deliberately. This is the *predicate* the Terraform
+    loud-fail needs ("does the mode axis need CDK?"); _mode_block is the *payload*
+    CDK reads. They used to be the same call, which forced _mode_block to return
+    None for autonomous/live and so prevented the mode LIST from ever reaching CDK.
+    Scans profile.mode, not axis_meta["mode"] (which holds only the last value)."""
+    mode_axis = catalog["axes"]["mode"]
+    return any(mode_axis[v].get("iac_module") for v in profile.mode)
+
+
+def _mode_block(profile, catalog) -> dict | None:
+    """Build the mode-axis block CDK reads, or None when the axis is inert.
+
+    Returns {modes, batch_runner_enabled, requires_refresh} when the mode axis is
+    ACTIONABLE, meaning it either provisions something (a value with an iac_module,
+    today only batch) or CONSTRAINS something (the profile does not declare
+    'autonomous', so the poller schedule and SQS consumer must not be wired).
+
+    Returns None only when the axis is inert — autonomous IS declared and there is
+    nothing to build. That avoids emitting a mode block for the cognito-basic default
+    (when mcp_path is disabled, no other axis fires either and run_emit returns None;
+    when mcp_path is enabled, the outbound block causes an artifact to be written but
+    the mode axis is still inert). A profile missing 'autonomous' emits even when
+    every other axis is a no-op, so the gate cannot be silently skipped.
+
+    Discriminator = iac_module presence read from the catalog, not the value name."""
     mode_axis = catalog["axes"]["mode"]
     metas = [mode_axis[v] for v in profile.mode]
     batch_runner_enabled = any(m.get("iac_module") for m in metas)
-    if not batch_runner_enabled:
+    autonomous_declared = "autonomous" in profile.mode
+    if not batch_runner_enabled and autonomous_declared:
         return None
     return {
         "modes": list(profile.mode),
-        "batch_runner_enabled": True,
+        "batch_runner_enabled": batch_runner_enabled,
         "requires_refresh": any(m.get("requires_refresh") for m in metas),
     }
 
@@ -197,9 +252,12 @@ def run_emit(
 ) -> dict | None:
     """Emit the resolved-profile artifact for the inbound, outbound and/or frontend axes.
 
-    Writes .auth-profile-resolved.json when EITHER the inbound axis is non-cognito
-    OR the outbound axis is non-basic. Returns the artifact dict, or None when both
-    axes are their no-op value (cognito inbound + basic outbound). The frontend block
+    Writes .auth-profile-resolved.json when the inbound axis is non-cognito, the
+    outbound axis is non-basic, BASIC is selected with the SAP MCP path enabled,
+    OR the mode axis is actionable (provisions a batch runner, or withholds
+    'autonomous' so CDK must refuse the autonomous path).
+    Returns the artifact dict, or None when every axis is its no-op value (cognito
+    inbound + basic outbound + a mode list declaring 'autonomous'). The frontend block
     is assembled only when include_frontend is True (the frontend-deploy path); on that
     path a direct-* frontend with missing overrides raises ValueError (fail-loud).
     Always validates the profile (raising ProfileValidationError / ValueError)."""
@@ -227,7 +285,9 @@ def run_emit(
         artifact["banner"] = inbound_art["banner"]
         artifact["inbound"] = inbound_art["inbound"]
 
-    outbound = _outbound_block(profile, mcp_invocation_url=mcp_invocation_url)
+    outbound = _outbound_block(
+        profile, mcp_invocation_url=mcp_invocation_url, mcp_path=mcp_path
+    )
     if outbound is not None:
         artifact["outbound"] = outbound
 
@@ -241,8 +301,21 @@ def run_emit(
         artifact["mode"] = mode_blk
 
     if stubs:
-        note = f"stub axes (model-only, no IaC yet): {', '.join(stubs)}"
+        # Name the cause per axis: "no IaC yet" was wrong for axes whose wiring is
+        # built and only awaiting external config (operator) or an AWS fix (upstream).
+        blockers = stub_blockers(profile, cat)
+        _CAUSE = {
+            "repo": "wiring not built here",
+            "operator": "wiring built, awaiting external config",
+            "upstream": "wiring built, blocked in an AWS service",
+        }
+        detail = ", ".join(
+            f"{a} ({_CAUSE[blockers[a]]})" if blockers.get(a) in _CAUSE else a
+            for a in stubs
+        )
+        note = f"stub axes — not deployable end to end: {detail}"
         artifact["banner"] = (artifact.get("banner", "").rstrip() + "\n" + note).strip()
+        artifact["stub_blockers"] = blockers
 
     if (
         "inbound" not in artifact
@@ -261,6 +334,8 @@ def _cdk_inputs() -> tuple[str, dict | None, dict | None, bool]:
 
     Env vars win for profile + inbound overrides (the only source reliably delivered
     into CodeBuild; cdk/config.yaml is git-ignored and not in the deployed zip).
+    The canonical YAML keys auth_profile, inbound_overrides, and frontend_overrides
+    are root-level; the former sap.* nesting remains a compatibility fallback.
     frontend_overrides and sap_mcp.enabled are read from cdk/config.yaml — both the
     frontend deploy and the SAP MCP adapter run locally where config.yaml is present,
     and the CDK adapter re-reads sap_mcp.enabled from config at synth regardless.
@@ -270,7 +345,19 @@ def _cdk_inputs() -> tuple[str, dict | None, dict | None, bool]:
     if _CDK_CONFIG.exists():
         with open(_CDK_CONFIG, encoding="utf-8") as fh:
             config = yaml.safe_load(fh) or {}
-    frontend_overrides = config.get("frontend_overrides")
+    # Auth-profile settings are top-level in the public config contract. Accept
+    # the briefly-shipped sap.* nesting as a compatibility fallback so existing
+    # copied configs do not silently fall back to cognito-basic.
+    legacy_sap = config.get("sap") or {}
+    frontend_overrides = config.get(
+        "frontend_overrides", legacy_sap.get("frontend_overrides")
+    )
+    inbound_overrides = config.get(
+        "inbound_overrides", legacy_sap.get("inbound_overrides")
+    )
+    profile_name = config.get(
+        "auth_profile", legacy_sap.get("auth_profile", "cognito-basic")
+    )
     mcp_enabled = bool((config.get("sap_mcp") or {}).get("enabled", False))
 
     env_profile = os.environ.get("AUTH_PROFILE")
@@ -280,12 +367,7 @@ def _cdk_inputs() -> tuple[str, dict | None, dict | None, bool]:
             os.environ.get("AUTH_INBOUND_ALLOWED_CLIENTS", ""),
         )
         return env_profile, overrides, frontend_overrides, mcp_enabled
-    return (
-        config.get("auth_profile", "cognito-basic"),
-        config.get("inbound_overrides"),
-        frontend_overrides,
-        mcp_enabled,
-    )
+    return profile_name, inbound_overrides, frontend_overrides, mcp_enabled
 
 
 def _run_cdk() -> int:

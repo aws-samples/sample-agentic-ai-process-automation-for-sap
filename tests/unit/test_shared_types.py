@@ -29,6 +29,7 @@ from generated_tickets import ResponseType, Ticket, TicketStatus  # noqa: E402
 from validate import validate_or_log  # noqa: E402
 
 VALID_WORKITEM = {
+    "case_id": "5100001692-2026",
     "document_number": "5100001692",
     "item_id": "2026",
     "domain": "finance_ap",

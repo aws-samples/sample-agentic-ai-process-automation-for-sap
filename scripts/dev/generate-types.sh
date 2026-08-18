@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 # Generates TypeScript and Python types from the JSON Schema source of truth.
-# Usage: ./scripts/generate-types.sh
+# Usage: ./scripts/dev/generate-types.sh
 # Called by: make generate-types
 set -euo pipefail
 
@@ -16,6 +16,14 @@ CASES_PY_OUT="lambdas/layers/shared_types/generated_cases.py"
 TICKETS_SCHEMA="types/tickets.schema.json"
 TICKETS_TS_OUT="frontend/src/types/generated-tickets.ts"
 TICKETS_PY_OUT="lambdas/layers/shared_types/generated_tickets.py"
+
+# The list of generated paths lives here and nowhere else. `--list` prints it so
+# check-types.sh and the pre-commit checks can ask rather than keep a copy that
+# silently drifts out of step with this script.
+if [[ "${1:-}" == "--list" ]]; then
+  printf '%s\n' "$CASES_TS_OUT" "$CASES_PY_OUT" "$TICKETS_TS_OUT" "$TICKETS_PY_OUT"
+  exit 0
+fi
 
 # Ensure quicktype is available
 if ! command -v npx &>/dev/null; then

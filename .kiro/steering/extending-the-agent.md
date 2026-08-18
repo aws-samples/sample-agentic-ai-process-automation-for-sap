@@ -16,7 +16,7 @@ A "skill" = a domain the agent can handle (e.g. example_finance_accruals, financ
 
 1. **Skill definition** → `skills/<domain>/`
    - `config.json` — skill_id, display_name, model_tier, gateway_tools list, process_type_to_sop mapping. Copy an existing one (e.g. `skills/example_finance_accruals/config.json`).
-   - `base_prompt.txt` — domain-specific system prompt. Must contain `{SOP_CONTENT}` placeholder where the SOP gets injected at runtime.
+   - `base_prompt.txt` — domain-specific system prompt. Must contain `{PLATFORM_MECHANICS}` (where the shared `skills/_platform_prompt.txt` is injected) and `{SOP_CONTENT}` (where the routed SOP is injected). Do not restate the shared mechanics — `make test` fails on a copy.
 
 2. **SOP document** → `knowledge-base/sops/<domain>/<sop_name>.txt`
    - One SOP per process_type. The `config.json` → `process_type_to_sop` maps process types to these files.
@@ -66,7 +66,8 @@ Lambdas that aren't gateway tools (pollers, processors, APIs) go in `lambdas/<la
 | What | Where | Read first |
 |------|-------|------------|
 | Skill config example | `skills/example_finance_accruals/config.json` | |
-| Base prompt example | `skills/example_finance_accruals/base_prompt.txt` | |
+| Base prompt example (domain-only) | `skills/example_finance_accruals/base_prompt.txt` | |
+| Shared platform mechanics | `skills/_platform_prompt.txt` | |
 | SOP example | `knowledge-base/sops/example_finance_accruals/po_accrual.txt` | |
 | Gateway tool example | `gateway/tools/notification/` | |
 | Tool spec example | `gateway/tools/notification/tool_spec.json` | |

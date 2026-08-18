@@ -205,7 +205,7 @@ def create_mock_jwt(user_id: str) -> str:
     """
     Create a mock unsigned JWT token with the given user_id as the 'sub' claim.
 
-    The agent's extract_user_id_from_context() decodes the JWT without signature
+    The agent's extract_user_id_from_headers() decodes the JWT without signature
     verification (since AgentCore Runtime validates it in production). This allows
     local testing to pass a user identity the same way production does.
 

@@ -43,29 +43,40 @@ Plan for ~20–30 minutes end-to-end (CDK deploy alone is 10–20 min), plus any
 - Node.js 20+, npm
 - Python 3.12+
 - AWS CLI (configured with appropriate permissions)
-- AWS CDK (`npm install -g aws-cdk`)
+- No global CDK install needed — the pinned version comes from `cdk/package.json`
 - **Bedrock model access enabled** for Claude in your target region — [request access](https://docs.aws.amazon.com/bedrock/latest/userguide/model-access.html) before you start.
 
 > [!IMPORTANT]
-> Missing Bedrock model access is the most common first-deploy failure. Request it before running `make setup` — approval can take a few minutes to a few hours.
+> Missing Bedrock model access is the most common first-deploy failure. Request it before you start — approval can take a few minutes to a few hours. `python3 launch.py doctor` will tell you whether the Bedrock API is reachable, but only the console can confirm the model grants.
 
 ### First-Time Setup
 
-The guided setup walks you through everything — config, deploy, SAP credentials, and knowledge base sync:
+The guided launcher walks you through everything — prerequisites, config, deploy, frontend, and the optional SAP and knowledge-base steps:
 
 ```bash
-make setup
+python3 launch.py
 ```
 
-That's the whole happy path. Only two config values are required to start: `stack_name_base` and `admin_user_email`. Everything else has safe defaults.
+That's the whole happy path. It needs nothing installed beyond the prerequisites above, and nothing is written to AWS until it shows you the target account and Region and you confirm. Only two config values are required to start: `stack_name_base` and `admin_user_email`. Everything else has safe defaults.
+
+Useful on their own:
+
+```bash
+python3 launch.py doctor      # check prerequisites and AWS access; changes nothing
+python3 launch.py configure   # generate cdk/config.yaml
+python3 launch.py status      # what is deployed, with endpoints
+python3 launch.py resume      # continue an interrupted launch
+python3 launch.py --help      # every command
+```
 
 Prefer to run each step yourself:
 
 ```bash
 cp cdk/config.yaml.example cdk/config.yaml   # edit: stack_name_base, admin_user_email
-python scripts/setup.py                       # prereqs → config → cdk deploy → frontend
-./scripts/sync-sap-secret.sh                  # (optional) sync SAP service-account creds
-./scripts/sync-knowledge-base.sh              # sync SOPs + API docs to S3
+cd cdk && npm ci && npx cdk deploy --all     # deploy the stacks
+python3 scripts/deploy/deploy-frontend.py    # build and deploy the frontend
+python3 launch.py sync-sap                   # (optional) sync SAP service-account creds
+python3 launch.py sync-kb                    # sync SOPs + API docs to S3
 ```
 
 Full walkthrough, including auth-profile options and troubleshooting: [Deployment Guide](docs/getting-started/DEPLOYMENT.md).
@@ -73,14 +84,14 @@ Full walkthrough, including auth-profile options and troubleshooting: [Deploymen
 ### Redeploy After Code Changes
 
 ```bash
-make deploy-all
+python3 launch.py deploy
 ```
 
-This runs CDK deploy, refreshes all Lambdas (so they pick up new SSM values), and redeploys the frontend.
+This deploys the CDK stacks, refreshes all Lambdas (so they pick up new SSM values), and redeploys the frontend. It confirms the target account and Region first; add `--yes` for unattended runs.
 
-### Available Make Targets
+### Make targets
 
-Run `make` to see all available targets grouped by category (Getting Started, Operations, Development, Code Quality).
+`make` is the contributor entry point — linting, tests, type generation, and packaging. Run `make` to see everything, grouped by category. Its deploy and operate targets delegate to the launcher, so `make deploy-all` and `python3 launch.py deploy` do the same thing.
 
 See [Deployment Guide](docs/getting-started/DEPLOYMENT.md) for full instructions, [scripts/README.md](scripts/README.md) for all available scripts.
 
@@ -88,8 +99,8 @@ See [Deployment Guide](docs/getting-started/DEPLOYMENT.md) for full instructions
 
 - **Multi-Skill Agent** — Dynamically loads domain expertise based on exception type. Each skill has a `config.json`, `base_prompt.txt`, and SOPs injected at runtime. Auto-discovered, no code changes to add new domains.
 - **Managed SAP OData via MCP** — the agent reaches SAP (reads, writes, discovery) through the external [AWS for SAP MCP Server](https://docs.aws.amazon.com/mcp-sap/latest/awsforsapmcp/introduction.html): service discovery, metadata inspection, and OData read/write/function-import tools. Our CDK is a thin adapter (Gateway target + OAuth2 provider) pointed at a customer-deployed SAP MCP stack; write enablement lives on that stack. See [ADR-012](docs/design-decisions/012-sap-mcp-server-integration.md).
-- **Autonomy Controls** — Two SSM-backed toggles (`trigger-mode`, `action-mode`) flippable without redeployment. Action-mode enforced at the Lambda level.
-- **Pluggable Notifications** — SES, Slack, Jira, or ServiceNow — one config value swap in `config.yaml`.
+- **Autonomy Controls** — `trigger-mode` (`auto` / `manual`) is an SSM-backed toggle, flippable without redeployment from Settings or the CLI, governing whether the poller auto-enqueues detected cases. Settings states what the mode has actually been doing and requires typing `AUTO` to arm. It gates *initiation*, not SAP writes — write gating lives in the Cedar policies at the Gateway and in the MCP server's write-enable flags. See [Autonomy controls](docs/security/AUTONOMY_CONTROLS.md).
+- **Pluggable Notifications** — SES, Jira, or ServiceNow — one config value swap in `config.yaml`.
 - **Ticket Management** — Built-in escalation and approval workflows correlated to ERP cases.
 - **SAP Connectivity & Identity** — Reference-only networking (you manage VPC/peering/VPN). The agent reaches SAP through the external AWS for SAP MCP server (reads + writes + discovery); the autonomous poller uses a service-account. See [SAP docs](docs/sap/CONNECTIVITY_AND_AUTH.md).
 - **Pluggable Enterprise Auth** — one config value (`auth_profile`) selects a full frontend/inbound/outbound identity path: Cognito + service-account for POC, or Entra/Okta-backed per-user identity (M2M, user federation, or seamless OBO token exchange) for production SAP access. See [Auth Profile Selection](docs/sap/AUTH_PROFILE_SELECTION.md).
@@ -112,7 +123,7 @@ See [Contributing Guide](docs/getting-started/CONTRIBUTING.md#project-layout) fo
 |-----------|-----------------|
 | `agentcore/` | Agent code (Strands SDK), Gateway tools, Cedar policies, evals |
 | `lambdas/` | All Lambda functions: pollers, APIs, webhooks, custom resources |
-| `skills/` | Domain skill configs + base prompts (auto-discovered) |
+| `skills/` | Domain skill configs + base prompts (auto-discovered), plus `_platform_prompt.txt` — the platform mechanics injected into every skill |
 | `knowledge-base/` | SOPs + SAP API docs (synced to S3) |
 | `cdk/` | CDK infrastructure (primary IaC path) |
 | `frontend/` | React app (Amplify Hosting) |
@@ -139,7 +150,7 @@ Full documentation index: [docs/README.md](docs/README.md)
 | Extending | [Adding Use Cases](docs/extending/ADDING_USE_CASES.md) · [Adding Skills](docs/extending/ADDING_SKILLS.md) · [Adding Tools](docs/extending/ADDING_GATEWAY_TOOLS.md) |
 | Evaluations | [Quick Start](docs/evaluations/EVALUATIONS_QUICKSTART.md) · [Cost Benchmark](docs/evaluations/COST_BENCHMARK.md) · [Full Guide](docs/evaluations/AGENTCORE_EVALUATIONS_GUIDE.md) |
 | Security | [Input Sanitization](docs/security/INPUT_SANITIZATION.md) · [Autonomy Controls](docs/security/AUTONOMY_CONTROLS.md) · [Webhook Verification](docs/security/WEBHOOK_VERIFICATION.md) |
-| Design Decisions | [ADR-001](docs/design-decisions/001-gateway-over-self-hosted-mcp.md)–[012](docs/design-decisions/012-sap-mcp-server-integration.md) |
+| Design Decisions | [ADR-001](docs/design-decisions/001-gateway-over-self-hosted-mcp.md)–[014](docs/design-decisions/014-sop-corpus-chunking.md) |
 
 ## Contributing
 

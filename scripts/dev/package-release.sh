@@ -50,6 +50,19 @@ for f in "${EXCLUDES[@]}"; do
   rm -f "$TMPDIR/$f"
 done
 
+# ── Scan scope ────────────────────────────────────────────────────────────────
+# Shared by both gates below. `*.json` and `*.txt` are here because shipped
+# agent content lives in them (skills/*/config.json, skills/*/base_prompt.txt,
+# knowledge-base/sops/*.txt) — leaving them out let a real account id ride along
+# in cdk/cdk.context.json until it was caught by hand.
+
+SCAN_INCLUDES=(
+  --include='*.py' --include='*.ts' --include='*.tsx' --include='*.js'
+  --include='*.tf' --include='*.yaml' --include='*.yml' --include='*.md'
+  --include='*.sh' --include='*.json' --include='*.txt'
+  --exclude='package-release.sh'
+)
+
 # ── Leak gate ─────────────────────────────────────────────────────────────────
 # Fails the build if the export tree still references internal-only paths or
 # internal-planning jargon. Runs against the post-export-ignore tree, so it
@@ -58,7 +71,7 @@ done
 
 echo "Scanning export tree for internal references..."
 LEAK_PATTERNS='\.docs-internal|docs/superpowers|\.threatmodel/|(^|[^a-zA-Z])MEMORY [a-z-]|spike-confirmed|fork.?2[ab]\b|design item #|spec §|Risk #[0-9]|\bP[0-8]-(deferred|slice)'
-if LEAKS=$(grep -rInE "$LEAK_PATTERNS" "$TMPDIR" --include='*.py' --include='*.ts' --include='*.tsx' --include='*.js' --include='*.tf' --include='*.yaml' --include='*.yml' --include='*.md' --include='*.sh' --exclude='package-release.sh' 2>/dev/null); then
+if LEAKS=$(grep -rInE "$LEAK_PATTERNS" "$TMPDIR" "${SCAN_INCLUDES[@]}" 2>/dev/null); then
   echo ""
   echo "  ✗ Internal references found in the export tree — clean these before publishing:"
   echo "$LEAKS" | sed "s|$TMPDIR/|    |"
@@ -75,10 +88,10 @@ echo "  ✓ no internal references"
 # are stripped before the re-match, so a line with both an allowed and a
 # leaked value still fails.
 
-IDENT_PATTERNS='\b[0-9]{12}\b|\b0oa[0-9a-zA-Z]{17}\b|trial-[0-9]{5,}\.okta\.com|demos\.sap\.aws\.dev|\bdielom|[a-zA-Z0-9._%+-]+@amazon\.com'
+IDENT_PATTERNS='\b[0-9]{12}\b|\b0oa[0-9a-zA-Z]{17}\b|trial-[0-9]{5,}|\.sap\.aws\.dev|\bsapbuild[0-9]+|\bdielom|[a-zA-Z0-9._%+-]+@amazon\.com'
 IDENT_ALLOW='(017000801446|111122223333|(opensource-codeofconduct|aws-security)@amazon\.com)'
 echo "Scanning export tree for internal identifiers..."
-if IDENT_LEAKS=$(grep -rInE "$IDENT_PATTERNS" "$TMPDIR" --include='*.py' --include='*.ts' --include='*.tsx' --include='*.js' --include='*.tf' --include='*.yaml' --include='*.yml' --include='*.md' --include='*.sh' --exclude='package-release.sh' 2>/dev/null \
+if IDENT_LEAKS=$(grep -rInE "$IDENT_PATTERNS" "$TMPDIR" "${SCAN_INCLUDES[@]}" 2>/dev/null \
     | sed -E "s/$IDENT_ALLOW//g" \
     | grep -E "$IDENT_PATTERNS"); then
   echo ""

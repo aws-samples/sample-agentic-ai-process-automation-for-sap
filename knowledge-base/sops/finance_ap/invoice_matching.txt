@@ -1,154 +1,194 @@
-INVOICE THREE-WAY MATCHING EXCEPTION RESOLUTION
+INVOICE THREE-WAY MATCHING — EXCEPTION RESOLUTION OVERVIEW
 STANDARD OPERATING PROCEDURE (SOP)
-Version 1.0
+Version 2.0
 
 ================================================================================
 PURPOSE
 ================================================================================
 
-This SOP defines the process for resolving three-way matching exceptions in
-SAP S/4HANA. Three-way matching validates that the purchase order, goods
-receipt, and supplier invoice agree on quantity, price, and terms before
-payment is released.
+This SOP defines the overview process for resolving three-way matching
+exceptions in SAP S/4HANA. Three-way matching validates that the purchase
+order (PO), goods receipt (GR), and supplier invoice agree on quantity, price,
+unit of measure, and terms before payment is released.
+
+This is the ENTRY-POINT SOP for generic AP exceptions (process types
+invoice_matching, three_way_match, ap_exception). When the exception type is
+already known, a focused SOP applies instead — see EXCEPTION TYPES below.
+
+The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT",
+"SHOULD", "SHOULD NOT", "RECOMMENDED", "MAY", and "OPTIONAL" in this
+document are to be interpreted as described in RFC 2119.
 
 ================================================================================
-EXCEPTION TYPES
+SCOPE
 ================================================================================
 
-1. QUANTITY VARIANCE
-   - Invoice quantity differs from goods receipt quantity
-   - Tolerance: ±5% or ±10 units (whichever is greater)
-   - Above tolerance: requires buyer approval
+Process Types: invoice_matching, three_way_match, ap_exception
+SAP Modules:   MM (Materials Management), FI-AP (Accounts Payable)
+SAP Service:   API_SUPPLIERINVOICE_PROCESS_SRV
 
-2. PRICE VARIANCE
-   - Invoice unit price differs from PO unit price
-   - Tolerance: ±2% or ±$0.50 (whichever is greater)
-   - Above tolerance: requires procurement approval
+Each specific exception type has a dedicated focused SOP that the agent uses
+when the process type is known:
 
-3. MISSING GOODS RECEIPT
-   - Invoice received but no goods receipt posted
-   - Check if goods are in transit or receipt is pending
-   - Escalate to warehouse/receiving after 5 business days
+| Exception            | Focused SOP (process_type)     |
+|----------------------|--------------------------------|
+| Price variance       | price_variance                 |
+| Quantity variance    | quantity_variance              |
+| Unit-of-measure diff | uom_mismatch                   |
+| Missing goods receipt| missing_goods_receipt          |
+| Missing / invalid PO | missing_purchase_order         |
+| Duplicate invoice    | duplicate_invoice              |
 
-4. PO NOT FOUND
-   - Invoice references a PO that does not exist or is closed
-   - Verify PO number with vendor
-   - Check for typos, leading zeros, or alternate PO formats
+================================================================================
+PRECONDITIONS
+================================================================================
 
-5. DUPLICATE INVOICE
-   - Invoice number already exists for this vendor
-   - Verify with vendor whether this is a true duplicate or resubmission
-   - Check for partial payments on original
+Before execution, the following MUST be true:
+
+1. The SAP MCP Server is reachable and the agent can read
+   API_SUPPLIERINVOICE_PROCESS_SRV entities.
+2. The case payload contains the supplier invoice number and fiscal year.
+3. The agent has NO memory of prior runs — each execution is stateless.
 
 ================================================================================
 STEP 1: GATHER DATA
 ================================================================================
 
-Retrieve from SAP:
-- Invoice header: vendor, amount, currency, invoice date, reference
-- Invoice line items: PO reference, quantity, unit price, GL account
-- PO header and line items: ordered quantity, net price, delivery terms
-- Goods receipt documents: received quantity, posting date, movement type
-- Prior invoices for same PO line (to detect duplicates/partials)
+1.1  The agent MUST retrieve from SAP:
+     - Invoice header (A_SupplierInvoice): vendor, amount, currency, invoice
+       date, reference.
+     - Invoice line items: PO reference, quantity, unit price, unit of measure,
+       GL account.
+     - PO header and items (A_PurchaseOrder / A_PurchaseOrderItem): ordered
+       quantity, net price, unit of measure, delivery terms.
+     - Goods receipt documents (A_MaterialDocumentHeader): received quantity,
+       posting date, movement type.
+     - Prior invoices for the same PO line (to detect duplicates/partials).
+
+1.2  IF any required document cannot be retrieved, the agent MUST NOT fabricate
+     it. The agent MUST attempt at least one alternative (filter query,
+     corrected key format) before concluding the document is unavailable.
 
 ================================================================================
 STEP 2: IDENTIFY EXCEPTION TYPE
 ================================================================================
 
-Compare invoice vs PO vs goods receipt:
-- Quantity variance = |invoice_qty - gr_qty| / gr_qty
-- Price variance = |invoice_price - po_price| / po_price
-- Check goods receipt existence
-- Check for duplicate invoice numbers
+2.1  The agent MUST compare invoice vs PO vs goods receipt and classify the
+     exception into exactly one type:
+
+     - Quantity variance = |invoice_qty - gr_qty| / gr_qty
+       ABOVE tolerance only when it exceeds BOTH {{QTY_VARIANCE_PCT}}% AND
+       {{QTY_VARIANCE_UNITS}} units. Breaching one limit is WITHIN tolerance.
+     - Price variance = |invoice_price - po_price| / po_price
+       ABOVE tolerance only when it exceeds BOTH {{PRICE_VARIANCE_PCT}}% AND
+       ${{PRICE_VARIANCE_ABS_USD}} per unit. Breaching one limit is WITHIN
+       tolerance.
+     - Unit-of-measure mismatch: invoice UoM differs from PO/GR UoM.
+     - Missing goods receipt: invoice present, no GR posted.
+     - Missing / invalid PO: invoice references a PO that does not exist or is
+       closed.
+     - Duplicate invoice: invoice number already exists for this vendor.
+
+2.2  Once the type is identified, the agent MUST call `load_sop` with the
+     matching process_type from the table in SCOPE, then follow that focused
+     SOP's resolution logic in place of STEP 3. The summaries in STEP 3 apply
+     only when `load_sop` is unavailable; if `load_sop` returns an error, the
+     agent MUST record that error in case state before falling back to them.
 
 ================================================================================
-STEP 3: APPLY RESOLUTION LOGIC
+STEP 3: APPLY RESOLUTION LOGIC (DEFAULT SUMMARIES)
 ================================================================================
 
-FOR QUANTITY VARIANCE:
-  IF within tolerance → auto-accept, post invoice
-  IF above tolerance AND invoice_qty < gr_qty → auto-accept (under-delivery)
-  IF above tolerance AND invoice_qty > gr_qty → escalate to buyer
-    Send an approval request email to {{CONTACT_PROCUREMENT}} with PO#, invoice#, qty difference, and $ impact
-    STOP processing — the recipient's reply will trigger the next step automatically
-    If approved: proceed with invoice posting
-    If denied: mark case for manual review
+3.1  FOR QUANTITY VARIANCE:
+  IF within tolerance → auto-accept, post invoice.
+  IF above tolerance AND invoice_qty < gr_qty → auto-accept (under-delivery).
+  IF above tolerance AND invoice_qty > gr_qty → escalate to the buyer at
+    {{CONTACT_PROCUREMENT}} with PO#, invoice#, quantity difference, and $ impact.
+    STOP and wait for the reply.
 
-FOR PRICE VARIANCE:
-  IF within tolerance → auto-accept, post invoice
-  IF above tolerance → escalate to procurement
+3.2  FOR PRICE VARIANCE:
+  IF within tolerance → auto-accept, post invoice.
+  IF above tolerance → escalate to procurement at {{CONTACT_PROCUREMENT}}.
+    STOP and wait for the reply.
 
-    IF a contract or blanket agreement is referenced on the PO →
-      Send an email to {{CONTACT_PROCUREMENT}} asking which contract terms or pricing tier applies
-      Include: PO#, invoice#, PO price, invoice price, contract/agreement reference
-      STOP processing — the recipient's reply will trigger the next step automatically
-      When procurement responds: use the clarified pricing to determine whether the variance is valid
-    OTHERWISE →
-      Send an approval request email to {{CONTACT_PROCUREMENT}} with PO#, invoice#, price difference, and contract ref
-      STOP processing — the recipient's reply will trigger the next step automatically
-    If approved or PO amended: proceed with invoice posting
-    If denied: mark case for manual review
+3.3  FOR UNIT-OF-MEASURE MISMATCH:
+  Attempt UoM conversion using the PO/material conversion factor. IF conversion
+  reconciles quantity within {{QTY_VARIANCE_PCT}}% → proceed. Otherwise escalate
+  to {{CONTACT_PROCUREMENT}}.
 
-FOR MISSING GOODS RECEIPT:
-  Check delivery tracking / ASN data
-  IF goods in transit → hold invoice, set reminder for 3 business days
-  IF no tracking data AND ≤5 business days →
-    Send an email to {{CONTACT_WAREHOUSE}} asking them to confirm received quantities and expected receipt date
-    Include: PO#, invoice#, vendor name, expected delivery date from PO
-    STOP processing — the recipient's reply will trigger the next step automatically
-    When the warehouse responds: use their confirmed quantities to continue resolution
-  IF >5 business days with no receipt → escalate to procurement
+3.4  FOR MISSING GOODS RECEIPT:
+  IF the PO schedule-line DeliveryDate is today or later → raise a ticket to
+    {{CONTACT_WAREHOUSE}} naming the re-check date
+    ({{GOODS_IN_TRANSIT_REMINDER_DAYS}} business days out). The agent has no
+    timer and MUST NOT promise to revisit the case itself.
+  IF no receipt after {{MISSING_GR_ESCALATION_DAYS}} business days → escalate to
+    {{CONTACT_WAREHOUSE}}.
 
-FOR PO NOT FOUND:
-  Verify PO number format (add leading zeros, check company code)
-  IF PO found after correction → reprocess
-  IF PO truly missing →
-    Send an email to {{CONTACT_PROCUREMENT}} asking them to provide the correct PO number or confirm whether a new PO is needed
-    Include: invoice#, vendor name, vendor's PO reference, invoice amount, line item descriptions
-    STOP processing — the recipient's reply will trigger the next step automatically
-    When the buyer responds: use the provided PO reference to continue resolution
+3.5  FOR MISSING / INVALID PO:
+  Verify PO number format (leading zeros, company code). IF still missing →
+    request the correct PO from {{CONTACT_PROCUREMENT}}. STOP and wait.
 
-FOR DUPLICATE INVOICE:
-  Compare amounts, dates, line items with original
-  IF exact duplicate → reject, notify vendor
-  IF different amounts → may be partial/corrective, escalate to AP team
+3.6  FOR DUPLICATE INVOICE:
+  Compare amounts, dates, line items with the original. IF exact duplicate →
+    reject and notify the vendor. IF different amounts → escalate to
+    {{CONTACT_AP_TEAM}}.
 
 ================================================================================
 STEP 4: EXECUTE RESOLUTION
 ================================================================================
 
-- Park invoice first, then post after approval
-- To release a blocked invoice after approval, use the Release function import
-- To post a parked invoice, use the Post function import
-- Update case state at each step
-- After each SAP write, poll get_case_state until last_sap_write_status is SUCCESS or FAILED
-- If FAILED: update case to 'error', notify AP team with error details, STOP
-- Send confirmation notifications per SOP only after write SUCCESS, using document numbers from last_sap_write_response
-- Document all decisions in processing history
+4.1  The agent MUST NOT attempt to park the invoice — the service exposes no
+     Park function import. The invoice already exists in SAP, so:
+     - IF the invoice is blocked, the agent MUST clear it with the Release
+       function import once any required approval is confirmed.
+     - IF the invoice was parked upstream, the agent MUST post it with the Post
+       function import once any required approval is confirmed.
+4.2  The agent MUST update case state at each step.
+4.3  IF an SAP write fails, the agent MUST update the case to 'error', notify
+     {{CONTACT_AP_TEAM}} with the error detail, and STOP.
+4.4  The agent MUST send confirmation notifications only after a write succeeds.
 
 ================================================================================
 STEP 5: CLOSE CASE
 ================================================================================
 
-- Verify all line items resolved
-- Update case status to 'complete'
-- Send summary notification to relevant stakeholders
+5.1  The agent MUST verify all line items are resolved.
+5.2  The agent MUST update case status to 'complete'.
+5.3  The agent SHOULD send a summary notification to the relevant stakeholders.
 
 ================================================================================
 CONTACTS
 ================================================================================
 
-- AP Team: {{CONTACT_AP_TEAM}}
-- Procurement: {{CONTACT_PROCUREMENT}}
-- Warehouse/Receiving: {{CONTACT_WAREHOUSE}}
-- Finance Approvals: {{CONTACT_FINANCE_APPROVALS}}
+- AP Team:              {{CONTACT_AP_TEAM}}
+- Procurement:          {{CONTACT_PROCUREMENT}}
+- Warehouse/Receiving:  {{CONTACT_WAREHOUSE}}
+- Finance Approvals:    {{CONTACT_FINANCE_APPROVALS}}
 
 ================================================================================
-TOLERANCES (CONFIGURABLE)
+TOLERANCES (CONFIGURABLE — DECLARED IN skills/finance_ap/config.json)
 ================================================================================
 
-| Type     | Percentage | Absolute  | Rule              |
-|----------|-----------|-----------|-------------------|
-| Quantity | ±5%       | ±10 units | Whichever greater |
-| Price    | ±2%       | ±$0.50    | Whichever greater |
-| Amount   | ±$100     | N/A       | Per line item     |
+Values are resolved at runtime from the skill's `constants` block; this table
+lists symbols only.
+
+| Parameter                          | Symbol                             |
+|------------------------------------|------------------------------------|
+| Quantity variance — percentage     | {{QTY_VARIANCE_PCT}}               |
+| Quantity variance — absolute units | {{QTY_VARIANCE_UNITS}}             |
+| Price variance — percentage        | {{PRICE_VARIANCE_PCT}}             |
+| Price variance — absolute (USD)    | {{PRICE_VARIANCE_ABS_USD}}         |
+| Amount tolerance per line (USD)    | {{LINE_AMOUNT_TOLERANCE_USD}}      |
+| Missing GR escalation (days)       | {{MISSING_GR_ESCALATION_DAYS}}     |
+| Goods-in-transit reminder (days)   | {{GOODS_IN_TRANSIT_REMINDER_DAYS}} |
+
+================================================================================
+REVISION HISTORY
+================================================================================
+
+| Version | Date       | Author       | Changes                              |
+|---------|------------|--------------|--------------------------------------|
+| 1.0     | 2025-06-08 | (initial)    | Comprehensive three-way match SOP    |
+| 2.0     | 2026-07-21 | Kiro         | Split into focused per-type SOPs;    |
+|         |            |              | tolerances externalized to config    |
+|         |            |              | constants as SYMBOL placeholders     |

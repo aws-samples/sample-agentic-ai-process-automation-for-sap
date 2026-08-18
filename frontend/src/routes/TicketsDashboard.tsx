@@ -1,11 +1,11 @@
 // Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
-"use client"
-
-import { useEffect, useState } from "react"
+import { useMemo, useState } from "react"
+import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { useAuth } from "react-oidc-context"
-import { Link, useSearchParams } from "react-router-dom"
+import { useFreshToken } from "@/hooks/useFreshToken"
+import { Link, useSearchParams } from "react-router"
 import { ArrowLeft } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
@@ -17,94 +17,100 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import type { Ticket, TicketStatus } from "@/types/tickets"
-import { TICKET_STATUS_META, TICKET_PRIORITY_META } from "@/types/tickets"
+import { TICKET_STATUS_META, ticketPriorityMeta, ticketStatusMeta } from "@/types/tickets"
+import { StatusBadge, StatusDot } from "@/components/ui/status-badge"
+import {
+  Banner,
+  DomainTabs,
+  EmptyState,
+  PageBody,
+  PageHeader,
+  PageLoader,
+} from "@/components/ui/page-chrome"
+import { TicketResponseControls } from "@/components/tickets/TicketResponseControls"
 import { fetchTickets, submitTicketAction } from "@/services/ticketsService"
 import { fetchCases } from "@/services/casesService"
-import { DOMAINS, DOMAIN_META, type Domain } from "@/types/cases"
-
-function StatusBadge({ status }: { status: TicketStatus }) {
-  const meta = TICKET_STATUS_META[status] ?? TICKET_STATUS_META.open
-  return (
-    <span
-      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${meta.color}`}
-    >
-      {meta.emoji} {meta.label}
-    </span>
-  )
-}
-
-function PriorityBadge({ priority }: { priority: string }) {
-  const meta =
-    TICKET_PRIORITY_META[priority as keyof typeof TICKET_PRIORITY_META] ??
-    TICKET_PRIORITY_META.medium
-  return (
-    <span
-      className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${meta.color}`}
-    >
-      {meta.label}
-    </span>
-  )
-}
-
-function timeAgo(iso: string): string {
-  const diff = Math.max(0, Date.now() - new Date(iso).getTime())
-  const mins = Math.floor(diff / 60000)
-  if (mins < 1) return "just now"
-  if (mins < 60) return `${mins}m ago`
-  const hrs = Math.floor(mins / 60)
-  if (hrs < 24) return `${hrs}h ago`
-  return `${Math.floor(hrs / 24)}d ago`
-}
+import { tryFormatCaseId, tryNormalizeCaseId } from "@/lib/caseKey"
+import { timeAgo } from "@/lib/timeAgo"
+import type { Domain, WorkItem } from "@/types/cases"
+import { DOMAINS } from "@/types/cases"
 
 export default function TicketsDashboard() {
-  const [tickets, setTickets] = useState<Ticket[]>([])
   const [filter, setFilter] = useState<TicketStatus | "all">("all")
-  const [domainFilter, setDomainFilter] = useState<Domain | "all">("all")
-  const [caseDomainMap, setCaseDomainMap] = useState<Record<string, Domain>>({})
+  const [domainFilter, setDomainFilter] = useState<Domain>(DOMAINS[0])
   const [selected, setSelected] = useState<Ticket | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
   const [actionLoading, setActionLoading] = useState(false)
+  const [actionError, setActionError] = useState<string | null>(null)
   const auth = useAuth()
+  const getFreshTokens = useFreshToken()
   const [searchParams, setSearchParams] = useSearchParams()
+  const queryClient = useQueryClient()
 
-  const token = auth.user?.id_token ?? ""
-  const caseIdFilter = searchParams.get("case_id") || ""
+  const caseIdFilter = tryNormalizeCaseId(searchParams.get("case_id")) || ""
 
-  // Build case_id → domain lookup from cases list
-  useEffect(() => {
-    if (!token) return
-    fetchCases({}, token)
-      .then(cases => {
-        const map: Record<string, Domain> = {}
-        for (const c of cases) map[`${c.document_number}#${c.item_id}`] = c.domain
-        setCaseDomainMap(map)
-      })
-      .catch(() => {})
-  }, [token])
-
-  async function load() {
-    setLoading(true)
-    setError(null)
-    try {
-      if (!token) throw new Error("Not authenticated")
-      let data = await fetchTickets({ status: filter }, token)
-      if (caseIdFilter) data = data.filter(t => t.case_id === caseIdFilter)
-      if (domainFilter !== "all")
-        data = data.filter(t => t.case_id && caseDomainMap[t.case_id] === domainFilter)
-      setTickets(data)
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Unknown error")
-    } finally {
-      setLoading(false)
+  // Own key, not shared with WorkspacePage's cases query: that one is keyed by
+  // filter/domainFilter, which persist across sessions (URL + localStorage). Its
+  // domain is now always a real domain and its status is rarely "all", so a shared
+  // key would silently stop being shared.
+  const casesQuery = useQuery({
+    queryKey: ["cases", "unfiltered"],
+    queryFn: async () => {
+      const { idToken } = await getFreshTokens()
+      if (!idToken) throw new Error("Not authenticated")
+      return fetchCases({}, idToken)
+    },
+    enabled: auth.isAuthenticated,
+  })
+  // Whole items, not just their domain: `GET /cases` returns `agent_traces`, so the
+  // proposal a ticket is asking about is already here — no second fetch to render it.
+  const caseById = useMemo(() => {
+    const map: Record<string, WorkItem> = {}
+    for (const c of casesQuery.data ?? []) {
+      const id = c.case_id ?? tryFormatCaseId(c.document_number, c.item_id)
+      if (id) map[id] = c
     }
+    return map
+  }, [casesQuery.data])
+
+  const ticketsQuery = useQuery({
+    queryKey: ["tickets", filter],
+    queryFn: async () => {
+      const { idToken } = await getFreshTokens()
+      if (!idToken) throw new Error("Not authenticated")
+      return fetchTickets({ status: filter }, idToken)
+    },
+    enabled: auth.isAuthenticated,
+  })
+
+  const tickets = useMemo(() => {
+    let data = ticketsQuery.data ?? []
+    // Tickets stored before the canonical form still hold `doc#item`, so both sides
+    // of the comparison go through the codec.
+    if (caseIdFilter) {
+      data = data.filter(t => tryNormalizeCaseId(t.case_id) === caseIdFilter)
+    }
+    // With one domain every case is already that domain, so this filter can only
+    // subtract: `caseById` comes from a second query, and while that is in flight — or
+    // when a ticket outlives its case — every ticket fails the lookup and the list reads
+    // empty. `"all"` used to keep this branch off the default path; the domain count does
+    // now.
+    if (DOMAINS.length > 1) {
+      data = data.filter(t => {
+        const id = tryNormalizeCaseId(t.case_id)
+        return id ? caseById[id]?.domain === domainFilter : false
+      })
+    }
+    return data
+  }, [ticketsQuery.data, caseIdFilter, domainFilter, caseById])
+
+  const loading = ticketsQuery.isLoading
+  const error =
+    actionError ?? (ticketsQuery.error instanceof Error ? ticketsQuery.error.message : null)
+
+  const load = () => {
+    ticketsQuery.refetch()
+    casesQuery.refetch()
   }
-
-  useEffect(() => {
-    load()
-  }, [filter, domainFilter, token, caseIdFilter, caseDomainMap])
-
-  const [replyText, setReplyText] = useState("")
 
   async function handleAction(
     ticketId: string,
@@ -113,168 +119,153 @@ export default function TicketsDashboard() {
     responseText?: string
   ) {
     setActionLoading(true)
+    setActionError(null)
     try {
+      const { idToken } = await getFreshTokens()
+      if (!idToken) throw new Error("Not authenticated")
       const { ticket: updated } = await submitTicketAction(
         ticketId,
         status,
         resolution,
-        token,
+        idToken,
         responseText
       )
-      setTickets(prev => prev.map(t => (t.ticket_id === ticketId ? updated : t)))
+      queryClient.setQueryData<Ticket[]>(["tickets", filter], prev =>
+        prev?.map(t => (t.ticket_id === ticketId ? updated : t))
+      )
       if (selected?.ticket_id === ticketId) setSelected(updated)
-      setReplyText("")
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Action failed")
+      setActionError(e instanceof Error ? e.message : "Action failed")
     } finally {
       setActionLoading(false)
     }
   }
 
   return (
-    <div className="flex flex-col h-full">
-      {/* Header */}
-      <div className="flex-none border-b px-6 py-4 flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-semibold">Ticket Management</h1>
-          <p className="text-xs text-gray-500">
-            ServiceNow-style approval queue for agent escalations
-          </p>
-        </div>
-        <div className="flex items-center gap-3">
-          {caseIdFilter && (
-            <Link to={`/?case=${caseIdFilter.replace("#", "-")}`}>
-              <Button size="sm" variant="outline" className="gap-1.5">
-                <ArrowLeft size={14} />
-                Back to Case
-              </Button>
-            </Link>
-          )}
-          {caseIdFilter && (
-            <span className="inline-flex items-center gap-1 px-2 py-1 rounded bg-blue-50 text-blue-700 text-xs">
-              Case: {caseIdFilter}
-              <button
-                onClick={() =>
-                  setSearchParams(prev => {
-                    prev.delete("case_id")
-                    return prev
-                  })
-                }
-                className="ml-1 hover:text-blue-900"
-              >
-                ✕
-              </button>
-            </span>
-          )}
-          <Select value={filter} onValueChange={v => setFilter(v as TicketStatus | "all")}>
-            <SelectTrigger className="w-40">
-              <SelectValue placeholder="Filter" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All statuses</SelectItem>
-              {(Object.keys(TICKET_STATUS_META) as TicketStatus[]).map(s => (
-                <SelectItem key={s} value={s}>
-                  {TICKET_STATUS_META[s].emoji} {TICKET_STATUS_META[s].label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Button variant="outline" size="sm" onClick={load}>
-            Refresh
-          </Button>
-        </div>
-      </div>
+    <>
+      <PageHeader
+        title="Ticket Management"
+        description="ServiceNow-style approval queue for agent escalations"
+        actions={
+          <>
+            {caseIdFilter && (
+              <>
+                <Link to={`/?case=${caseIdFilter}`}>
+                  <Button size="sm" variant="outline" className="gap-1.5">
+                    <ArrowLeft size={14} />
+                    Back to Case
+                  </Button>
+                </Link>
+                <span className="inline-flex items-center gap-1 rounded bg-muted px-2 py-1 text-xs">
+                  Case: {caseIdFilter}
+                  <button
+                    onClick={() =>
+                      setSearchParams(prev => {
+                        prev.delete("case_id")
+                        return prev
+                      })
+                    }
+                    className="ml-1 text-muted-foreground hover:text-foreground"
+                    aria-label="Clear case filter"
+                  >
+                    ✕
+                  </button>
+                </span>
+              </>
+            )}
+            <Select value={filter} onValueChange={v => setFilter(v as TicketStatus | "all")}>
+              <SelectTrigger className="w-40">
+                <SelectValue placeholder="Filter" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All statuses</SelectItem>
+                {(Object.keys(TICKET_STATUS_META) as TicketStatus[]).map(s => (
+                  <SelectItem key={s} value={s}>
+                    <span className="inline-flex items-center gap-1.5">
+                      <StatusDot tone={TICKET_STATUS_META[s].tone} />
+                      {TICKET_STATUS_META[s].label}
+                    </span>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Button variant="outline" size="sm" onClick={load}>
+              Refresh
+            </Button>
+          </>
+        }
+      />
 
-      {/* Domain tabs */}
-      <div className="flex-none flex border-b px-6">
-        <button
-          onClick={() => setDomainFilter("all")}
-          className={`px-3 py-2 text-xs font-medium border-b-2 transition-colors ${
-            domainFilter === "all"
-              ? "border-blue-500 text-blue-600"
-              : "border-transparent text-gray-500 hover:text-gray-700"
-          }`}
-        >
-          All
-        </button>
-        {DOMAINS.map(d => (
-          <button
-            key={d}
-            onClick={() => setDomainFilter(d)}
-            className={`px-3 py-2 text-xs font-medium border-b-2 transition-colors ${
-              domainFilter === d
-                ? "border-blue-500 text-blue-600"
-                : "border-transparent text-gray-500 hover:text-gray-700"
-            }`}
-          >
-            {DOMAIN_META[d].short}
-          </button>
-        ))}
-      </div>
+      {DOMAINS.length > 1 && <DomainTabs value={domainFilter} onChange={setDomainFilter} />}
 
       <div className="grow flex overflow-hidden">
         {/* Ticket list */}
-        <div className="w-1/2 border-r overflow-auto p-4 space-y-2">
+        <PageBody className="w-1/2 border-r space-y-2">
           {error && (
-            <div className="bg-red-50 border-l-4 border-red-500 p-3 mb-2">
-              <p className="text-sm text-red-700">{error}</p>
-            </div>
+            <Banner tone="danger" className="mb-2">
+              {error}
+            </Banner>
           )}
 
           {loading ? (
-            <p className="text-gray-500 text-center mt-12">Loading tickets…</p>
+            <PageLoader label="Loading tickets…" />
           ) : tickets.length === 0 ? (
-            <p className="text-gray-500 text-center mt-12">
-              No tickets found. The agent will create tickets here when it escalates exceptions.
-            </p>
+            <EmptyState
+              message="No tickets yet."
+              hint="The agent opens a ticket here when it escalates an exception."
+            />
           ) : (
             tickets.map(t => (
               <Card
                 key={t.ticket_id}
-                className={`p-3 cursor-pointer hover:bg-gray-50 ${selected?.ticket_id === t.ticket_id ? "ring-2 ring-blue-500" : ""}`}
+                className={`p-3 cursor-pointer hover:bg-muted ${selected?.ticket_id === t.ticket_id ? "ring-2 ring-ring" : ""}`}
                 onClick={() => setSelected(t)}
               >
                 <div className="flex items-center justify-between mb-1">
-                  <span className="font-mono text-xs text-gray-500">{t.ticket_id}</span>
-                  <span className="text-xs text-gray-400">{timeAgo(t.updated_at)}</span>
+                  <span className="font-mono text-xs text-muted-foreground">{t.ticket_id}</span>
+                  <span className="text-xs text-muted-foreground/70">{timeAgo(t.updated_at)}</span>
                 </div>
                 <p className="text-sm font-medium truncate">{t.title}</p>
                 <div className="flex items-center gap-2 mt-1">
-                  <StatusBadge status={t.status} />
-                  <PriorityBadge priority={t.priority} />
+                  <StatusBadge {...ticketStatusMeta(t.status)} />
+                  <StatusBadge {...ticketPriorityMeta(t.priority)} />
                   {t.assigned_to && (
-                    <span className="text-xs text-gray-500">→ {t.assigned_to}</span>
+                    <span className="text-xs text-muted-foreground">→ {t.assigned_to}</span>
                   )}
                 </div>
               </Card>
             ))
           )}
-        </div>
+        </PageBody>
 
         {/* Detail panel */}
-        <div className="w-1/2 overflow-auto p-6">
+        <PageBody className="w-1/2">
           {selected ? (
             <div className="space-y-4">
               <div>
-                <h2 className="text-lg font-semibold">{selected.title}</h2>
+                <h2 className="font-display text-lg font-semibold tracking-tight">
+                  {selected.title}
+                </h2>
                 <div className="flex items-center gap-2 mt-1">
-                  <StatusBadge status={selected.status} />
-                  <PriorityBadge priority={selected.priority} />
-                  <span className="text-xs text-gray-500">Created by: {selected.created_by}</span>
+                  <StatusBadge {...ticketStatusMeta(selected.status)} />
+                  <StatusBadge {...ticketPriorityMeta(selected.priority)} />
+                  <span className="text-xs text-muted-foreground">
+                    Created by: {selected.created_by}
+                  </span>
                 </div>
               </div>
 
               <div>
-                <h3 className="text-sm font-medium text-gray-700 mb-1">Description</h3>
-                <p className="text-sm text-gray-600 whitespace-pre-wrap">
+                <h3 className="text-sm font-medium text-foreground mb-1">Description</h3>
+                <p className="text-sm text-muted-foreground whitespace-pre-wrap">
                   {selected.description || "No description"}
                 </p>
               </div>
 
               {selected.case_id && (
                 <div>
-                  <h3 className="text-sm font-medium text-gray-700 mb-1">Related Case</h3>
-                  <Link to={`/?case=${selected.case_id.replace("#", "-")}`}>
+                  <h3 className="text-sm font-medium text-foreground mb-1">Related Case</h3>
+                  <Link to={`/?case=${tryNormalizeCaseId(selected.case_id) ?? ""}`}>
                     <Button size="sm" variant="outline" className="gap-1.5">
                       <ArrowLeft size={14} />
                       {selected.case_id}
@@ -285,67 +276,28 @@ export default function TicketsDashboard() {
 
               {selected.assigned_to && (
                 <div>
-                  <h3 className="text-sm font-medium text-gray-700">Assigned To</h3>
+                  <h3 className="text-sm font-medium text-foreground">Assigned To</h3>
                   <p className="text-sm">{selected.assigned_to}</p>
                 </div>
               )}
 
               {selected.resolution && (
                 <div>
-                  <h3 className="text-sm font-medium text-gray-700">Resolution</h3>
-                  <p className="text-sm text-gray-600">{selected.resolution}</p>
+                  <h3 className="text-sm font-medium text-foreground">Resolution</h3>
+                  <p className="text-sm text-muted-foreground">{selected.resolution}</p>
                 </div>
               )}
 
-              {/* Action buttons — only for actionable statuses */}
               {(selected.status === "open" || selected.status === "assigned") && (
-                <div className="pt-2 border-t space-y-3">
-                  {selected.response_type === "free_text" ? (
-                    <>
-                      <textarea
-                        className="w-full border rounded-md p-2 text-sm min-h-[80px] resize-y"
-                        placeholder="Type your reply…"
-                        value={replyText}
-                        onChange={e => setReplyText(e.target.value)}
-                      />
-                      <Button
-                        size="sm"
-                        disabled={actionLoading || !replyText.trim()}
-                        onClick={() =>
-                          handleAction(
-                            selected.ticket_id,
-                            "replied",
-                            replyText.trim(),
-                            replyText.trim()
-                          )
-                        }
-                      >
-                        💬 Send Reply
-                      </Button>
-                    </>
-                  ) : (
-                    <div className="flex gap-2">
-                      <Button
-                        size="sm"
-                        disabled={actionLoading}
-                        onClick={() =>
-                          handleAction(selected.ticket_id, "approved", "Approved by reviewer")
-                        }
-                      >
-                        ✅ Approve
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        disabled={actionLoading}
-                        onClick={() =>
-                          handleAction(selected.ticket_id, "denied", "Denied by reviewer")
-                        }
-                      >
-                        🔴 Deny
-                      </Button>
-                    </div>
-                  )}
+                <div className="pt-2 border-t">
+                  <TicketResponseControls
+                    ticket={selected}
+                    submitting={actionLoading}
+                    traces={caseById[tryNormalizeCaseId(selected.case_id) ?? ""]?.agent_traces}
+                    onAction={(action, resolution, responseText) =>
+                      handleAction(selected.ticket_id, action, resolution, responseText)
+                    }
+                  />
                 </div>
               )}
 
@@ -365,16 +317,14 @@ export default function TicketsDashboard() {
                           selected.status as "approved" | "denied" | "replied",
                           "Retry: re-enqueued by reviewer",
                           selected.status === "replied"
-                            ? [...(selected.comments ?? [])]
-                                .reverse()
-                                .find(c => c.author === "user")?.text
+                            ? (selected.resolution ?? undefined)
                             : undefined
                         )
                       }
                     >
                       🔄 Retry — re-send to agent
                     </Button>
-                    <p className="text-xs text-gray-400 mt-1">
+                    <p className="text-xs text-muted-foreground/70 mt-1">
                       Re-enqueues the linked case with the same decision. Use if the agent errored
                       or timed out.
                     </p>
@@ -384,11 +334,11 @@ export default function TicketsDashboard() {
               {/* Comments */}
               {selected.comments && selected.comments.length > 0 && (
                 <div>
-                  <h3 className="text-sm font-medium text-gray-700 mb-2">Comments</h3>
+                  <h3 className="text-sm font-medium text-foreground mb-2">Comments</h3>
                   <div className="space-y-2">
                     {selected.comments.map((c, i) => (
-                      <div key={i} className="bg-gray-50 rounded p-2">
-                        <div className="flex justify-between text-xs text-gray-500">
+                      <div key={i} className="bg-muted rounded p-2">
+                        <div className="flex justify-between text-xs text-muted-foreground">
                           <span>{c.author}</span>
                           <span>{timeAgo(c.timestamp)}</span>
                         </div>
@@ -400,10 +350,10 @@ export default function TicketsDashboard() {
               )}
             </div>
           ) : (
-            <p className="text-gray-400 text-center mt-12">Select a ticket to view details</p>
+            <EmptyState message="Select a ticket to view details" />
           )}
-        </div>
+        </PageBody>
       </div>
-    </div>
+    </>
   )
 }

@@ -24,16 +24,24 @@ from decimal import Decimal
 
 import boto3
 
+# Canonical case identity codec — ships in the shared_types layer. Ticket
+# correlation and the agent resume message both key on a case_id, so it is
+# imported unconditionally.
+from case_key import try_normalize_case_id
+
 # Ticket model + validator ship in the shared_types Lambda layer. Best-effort
 # import: absent in local dev/test (validation no-ops), present in the Lambda.
 try:
-    from generated_tickets import Ticket
+    from generated_tickets import ResponseType, Ticket
     from validate import validate_or_log
 except ImportError:
     Ticket = None
+    VALID_RESPONSE_TYPES = {"approval", "free_text"}
 
     def validate_or_log(model, data, *, context=""):
         return data
+else:
+    VALID_RESPONSE_TYPES = {response_type.value for response_type in ResponseType}
 
 
 logger = logging.getLogger()
@@ -76,6 +84,25 @@ def _response(status_code: int, body: object, origin: str = "") -> dict:
         "headers": {"Content-Type": "application/json", **_cors_headers(origin)},
         "body": json.dumps(body, default=_decimal_default),
     }
+
+
+def _reviewer_identity(event: dict) -> str | None:
+    """Return a human-readable identity from the trusted authorizer context."""
+    authorizer = (event.get("requestContext") or {}).get("authorizer") or {}
+    claims = authorizer.get("claims") or authorizer
+    for key in (
+        "email",
+        "preferred_username",
+        "cognito:username",
+        "username",
+        "upn",
+        "sub",
+        "principalId",
+    ):
+        value = claims.get(key)
+        if value:
+            return str(value).strip()[:256]
+    return None
 
 
 def handler(event: dict, context: object) -> dict:
@@ -125,6 +152,14 @@ def _create_ticket(event: dict, origin: str) -> dict:
     if not title:
         return _response(400, {"error": "title is required"}, origin)
 
+    response_type = body.get("response_type", "approval")
+    if response_type not in VALID_RESPONSE_TYPES:
+        return _response(
+            400,
+            {"error": f"response_type must be one of: {sorted(VALID_RESPONSE_TYPES)}"},
+            origin,
+        )
+
     now = datetime.now(timezone.utc).isoformat()
     ticket = {
         "ticket_id": f"TKT-{uuid.uuid4().hex[:8].upper()}",
@@ -136,9 +171,12 @@ def _create_ticket(event: dict, origin: str) -> dict:
         else "medium",
         "created_by": body.get("created_by", "agent"),
         "assigned_to": body.get("assigned_to", ""),
-        "case_id": body.get("case_id", ""),
+        # Store the canonical form so the tickets UI can filter on, and the
+        # resume path can route by, one representation. An id we cannot parse is
+        # dropped rather than stored in a shape nothing else understands.
+        "case_id": try_normalize_case_id(body.get("case_id")) or "",
         "category": body.get("category", "general"),
-        "response_type": body.get("response_type", "approval"),
+        "response_type": response_type,
         "resolution": "",
         "comments": [],
         "created_at": now,
@@ -174,8 +212,13 @@ def _update_ticket(ticket_id: str, event: dict, origin: str) -> dict:
 
     comment_text = body.get("comment", "").strip()
     if comment_text:
+        reviewer = _reviewer_identity(event)
+        if not reviewer:
+            return _response(
+                401, {"error": "Authenticated reviewer is required"}, origin
+            )
         comment = {
-            "author": body.get("comment_author", "system"),
+            "author": reviewer,
             "text": comment_text,
             "timestamp": expr_values[":ts"],
         }
@@ -228,8 +271,7 @@ def _list_tickets(event: dict, origin: str) -> dict:
 
 
 def _action_ticket(ticket_id: str, event: dict, origin: str) -> dict:
-    """Approve/deny/reply: set the ticket status, then enqueue the linked case
-    onto the agent SQS FIFO queue with an explicit 'ticket-action' trigger."""
+    """Validate a human response, persist it, and resume the linked case."""
     try:
         body = json.loads(event.get("body", "{}"))
     except json.JSONDecodeError:
@@ -238,12 +280,83 @@ def _action_ticket(ticket_id: str, event: dict, origin: str) -> dict:
     action = body.get("action", "")
     if action not in VALID_ACTIONS:
         return _response(
-            400, {"error": f"action must be one of: {VALID_ACTIONS}"}, origin
+            400, {"error": f"action must be one of: {sorted(VALID_ACTIONS)}"}, origin
+        )
+    if not QUEUE_URL:
+        return _response(503, {"error": "Agent resume queue is unavailable"}, origin)
+
+    reviewer = _reviewer_identity(event)
+    if not reviewer:
+        return _response(401, {"error": "Authenticated reviewer is required"}, origin)
+
+    current = table.get_item(Key={"ticket_id": ticket_id}, ConsistentRead=True).get(
+        "Item"
+    )
+    if not current:
+        return _response(404, {"error": "Ticket not found"}, origin)
+
+    current_status = current.get("status", "open")
+    decided_statuses = {"approved", "denied", "replied"}
+    if current_status == "closed":
+        return _response(409, {"error": "Ticket is already closed"}, origin)
+    if current_status in decided_statuses and action != current_status:
+        return _response(
+            409,
+            {
+                "error": (
+                    f"Ticket already has decision {current_status}; "
+                    f"cannot change it to {action}"
+                )
+            },
+            origin,
+        )
+    if current_status not in {"open", "assigned", *decided_statuses}:
+        return _response(
+            409, {"error": f"Ticket has unsupported status: {current_status}"}, origin
         )
 
-    resolution = body.get("resolution", f"{action.title()} by reviewer")
-    comment = body.get("comment", f"Ticket {action} by user")
+    response_type = current.get("response_type", "approval")
+    if response_type not in VALID_RESPONSE_TYPES:
+        return _response(
+            409,
+            {"error": f"Ticket has unsupported response_type: {response_type}"},
+            origin,
+        )
+
     response_text = body.get("response_text", "")
+    if not isinstance(response_text, str):
+        return _response(400, {"error": "response_text must be a string"}, origin)
+    response_text = response_text.strip()
+
+    if response_type == "free_text":
+        if action != "replied":
+            return _response(
+                400,
+                {"error": "This ticket requires a free-text reply"},
+                origin,
+            )
+        if not response_text:
+            return _response(400, {"error": "response_text is required"}, origin)
+        response_text = response_text[:5000]
+    elif action not in {"approved", "denied"}:
+        return _response(
+            400,
+            {"error": "This ticket requires an approve or deny decision"},
+            origin,
+        )
+
+    # Tickets created before the canonical form existed still hold `doc#item`;
+    # normalize so the resume message and its FIFO group match every other
+    # producer for this case.
+    case_id = try_normalize_case_id(current.get("case_id"))
+    if not case_id:
+        return _response(409, {"error": "Ticket is not linked to a case"}, origin)
+
+    default_resolution = (
+        response_text if action == "replied" else f"{action.title()} by reviewer"
+    )
+    resolution = body.get("resolution") or default_resolution
+    comment = body.get("comment") or default_resolution
 
     now = datetime.now(timezone.utc).isoformat()
     try:
@@ -259,7 +372,7 @@ def _action_ticket(ticket_id: str, event: dict, origin: str) -> dict:
                 ":res": resolution,
                 ":ts": now,
                 ":empty": [],
-                ":comment": [{"author": "user", "text": comment, "timestamp": now}],
+                ":comment": [{"author": reviewer, "text": comment, "timestamp": now}],
             },
             ConditionExpression="attribute_exists(ticket_id)",
             ReturnValues="ALL_NEW",
@@ -268,30 +381,26 @@ def _action_ticket(ticket_id: str, event: dict, origin: str) -> dict:
         return _response(404, {"error": "Ticket not found"}, origin)
 
     ticket = resp["Attributes"]
-    case_id = ticket.get("case_id", "")
-
-    enqueued = False
-    if case_id and QUEUE_URL:
-        sqs.send_message(
-            QueueUrl=QUEUE_URL,
-            MessageBody=json.dumps(
-                {
-                    "case_id": case_id,
-                    "trigger": "ticket-action",
-                    "payload": {
-                        "source": "ticket-action",
-                        "ticket_id": ticket_id,
-                        "ticket_decision": action,
-                        "resolution": resolution,
-                        **({"response_text": response_text} if response_text else {}),
-                    },
-                }
-            ),
-            MessageGroupId=case_id,
-        )
-        enqueued = True
-        logger.info("Enqueued case=%s after ticket %s %s", case_id, ticket_id, action)
+    message_payload = {
+        "source": "ticket-action",
+        "ticket_id": ticket_id,
+        "ticket_decision": action,
+        "resolution": resolution,
+        **({"response_text": response_text} if response_text else {}),
+    }
+    sqs.send_message(
+        QueueUrl=QUEUE_URL,
+        MessageBody=json.dumps(
+            {
+                "case_id": case_id,
+                "trigger": "ticket-action",
+                "payload": message_payload,
+            }
+        ),
+        MessageGroupId=case_id,
+    )
+    logger.info("Enqueued case=%s after ticket %s %s", case_id, ticket_id, action)
 
     return _response(
-        200, {"ticket": ticket, "enqueued": enqueued, "case_id": case_id}, origin
+        200, {"ticket": ticket, "enqueued": True, "case_id": case_id}, origin
     )

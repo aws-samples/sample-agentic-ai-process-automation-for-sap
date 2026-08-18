@@ -98,6 +98,10 @@ resource "aws_lambda_function" "webhook_processor" {
   filename         = data.archive_file.webhook_processor.output_path
   source_code_hash = data.archive_file.webhook_processor.output_base64sha256
 
+  # Needed for the case_key codec — the webhook path derives a case identity from
+  # untrusted inbound content.
+  layers = [aws_lambda_layer_version.shared_types.arn]
+
   environment {
     variables = {
       AGENT_QUEUE_URL = aws_sqs_queue.agent_queue.url

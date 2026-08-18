@@ -1,6 +1,6 @@
 GOODS RECEIPT REVERSAL EXCEPTION RESOLUTION
 STANDARD OPERATING PROCEDURE (SOP)
-Version 1.0
+Version 1.2
 
 ================================================================================
 PURPOSE
@@ -34,146 +34,148 @@ PRECONDITIONS
 - The case payload MUST contain a valid material_document_number.
 - The case payload MUST contain a fiscal_year.
 - The agent MUST have read access to MM and QM OData services.
-- The action-mode SSM parameter MUST NOT be set to "read-only" for
-  reversal posting steps.
+- The agent's Cedar role MUST permit the SAP write actions used in §5.2,
+  and the SAP MCP server MUST have writes enabled. Both are enforced
+  outside the agent — if either denies the call, the agent MUST escalate
+  rather than retry.
 
 ================================================================================
 STEP 1: RETRIEVE MATERIAL DOCUMENT
 ================================================================================
 
-The agent MUST retrieve the original goods receipt material document using
-A_MaterialDocumentHeader with filters:
-  MaterialDocument = <material_document_number>
-  MaterialDocumentYear = <fiscal_year>
+1.1  The agent MUST retrieve the original goods receipt material document
+     using A_MaterialDocumentHeader with filters:
+       MaterialDocument = <material_document_number>
+       MaterialDocumentYear = <fiscal_year>
 
-The agent MUST also retrieve all line items via the navigation property
-to_MaterialDocumentItem.
+1.2  The agent MUST also retrieve all line items via the navigation property
+     to_MaterialDocumentItem.
 
-IF the material document is not found, the agent MUST update case state
-to "error" with reason "Material document not found" and halt processing.
+1.3  IF the material document is not found, the agent MUST update case state
+     to "error" with reason "Material document not found" and halt processing.
 
-The agent MUST NOT proceed with fabricated document data under any
-circumstances.
+1.4  The agent MUST NOT proceed with fabricated document data under any
+     circumstances.
 
 ================================================================================
 STEP 2: VALIDATE REVERSAL ELIGIBILITY
 ================================================================================
 
-The agent MUST check each line item for reversal eligibility:
+2.1  The item MUST NOT already be reversed. Check the
+     ReversedMaterialDocument field — if populated, the item has already
+     been reversed.
 
-  a) The item MUST NOT already be reversed. Check the ReversedMaterialDocument
-     field — if populated, the item has already been reversed.
-
-  b) The item SHOULD NOT have an open invoice reference. Check via
+2.2  The item SHOULD NOT have an open invoice reference. Check via
      A_PurchaseOrderItem → InvoiceIsExpected and InvoiceReceiptQty fields.
      IF an invoice has been posted against this GR, the agent MUST escalate
      to the AP team before proceeding.
 
-  c) The posting date of the reversal MUST fall within an open fiscal period.
+2.3  The posting date of the reversal MUST fall within an open fiscal period.
      The agent SHOULD use the current date as the reversal posting date.
      IF the original posting period is closed, the agent MUST use the
      first day of the current open period.
 
-The agent MUST update case state with the eligibility assessment for each
-line item before proceeding.
+2.4  The agent MUST update case state with the eligibility assessment for
+     each line item before proceeding.
 
 ================================================================================
 STEP 3: DETERMINE REVERSAL REASON
 ================================================================================
 
-The agent MUST classify the reversal reason based on the case payload:
+3.1  The agent MUST classify the reversal reason based on the case payload.
 
-  IF process_type = "gr_quality_reject":
-    The agent MUST retrieve the inspection lot via A_InspectionLot filtered
-    by Material and Batch. The reversal reason code SHALL be "04" (quality
-    rejection).
+3.2  IF process_type = "gr_quality_reject":
+       The agent MUST retrieve the inspection lot via A_InspectionLot
+       filtered by Material and Batch. The reversal reason code SHALL be
+       "04" (quality rejection).
 
-  IF process_type = "gr_reversal" AND the case notes indicate wrong quantity:
-    The reversal reason code SHALL be "01" (quantity correction).
+3.3  IF process_type = "gr_reversal" AND the case notes indicate wrong
+     quantity: the reversal reason code SHALL be "01" (quantity correction).
 
-  IF process_type = "gr_reversal" AND the case notes indicate wrong material:
-    The reversal reason code SHALL be "02" (wrong material).
+3.4  IF process_type = "gr_reversal" AND the case notes indicate wrong
+     material: the reversal reason code SHALL be "02" (wrong material).
 
-  IF the reason cannot be determined from available data, the agent MUST
-  escalate to the warehouse team and MUST NOT post the reversal.
+3.5  IF the reason cannot be determined from available data, the agent MUST
+     escalate to the warehouse team and MUST NOT post the reversal.
 
 ================================================================================
 STEP 4: CHECK STOCK AVAILABILITY
 ================================================================================
 
-The agent MUST verify that sufficient unrestricted stock exists at the
-storage location to cover the reversal quantity.
+4.1  The agent MUST verify that sufficient unrestricted stock exists at the
+     storage location to cover the reversal quantity.
 
-  IF available stock < reversal quantity:
-    The agent MUST NOT post the reversal.
-    The agent MUST escalate to the warehouse team with the stock shortfall
-    details.
-    The agent SHOULD include current stock levels and the deficit amount
-    in the escalation notification.
+4.2  IF available stock < reversal quantity:
+       The agent MUST NOT post the reversal.
+       The agent MUST escalate to the warehouse team with the stock
+       shortfall details.
+       The agent SHOULD include current stock levels and the deficit amount
+       in the escalation notification.
 
-  IF available stock >= reversal quantity:
-    The agent MAY proceed to the posting step.
+4.3  IF available stock >= reversal quantity, the agent MAY proceed to the
+     posting step.
 
 ================================================================================
 STEP 5: POST REVERSAL
 ================================================================================
 
-The agent MUST check the action-mode SSM parameter before posting.
+Write authorization is enforced at the Gateway (Cedar policy) and at the SAP
+MCP server — not by this SOP. What the SOP governs is when the agent MUST
+seek human approval before attempting the write.
 
-  IF action-mode = "supervised":
-    The agent MUST present the reversal details to the user and wait for
-    explicit approval before posting. The agent MUST NOT auto-post.
+5.1  IF the reversal value exceeds auto_post_max_value:
+       The agent MUST create an approval ticket carrying the reversal
+       details and halt. The agent MUST NOT post until a human approves that
+       ticket; the decision arrives as a separate ticket-action invocation.
 
-  IF action-mode = "full-auto":
-    The agent SHALL post the reversal via A_MaterialDocumentHeader using
-    movement type 102 (GR reversal for PO).
+5.2  OTHERWISE the agent SHALL post the reversal via
+     A_MaterialDocumentHeader using movement type 102 (GR reversal for PO).
 
-The reversal posting payload MUST include:
-  - GoodsMovementCode: "02" (goods receipt)
-  - MaterialDocument: <original_material_document_number>
-  - MaterialDocumentYear: <fiscal_year>
-  - PostingDate: <determined in Step 2c>
-  - ReverseGoodsMovementReason: <determined in Step 3>
+5.3  The reversal posting payload MUST include:
+       - GoodsMovementCode: "02" (goods receipt)
+       - MaterialDocument: <original_material_document_number>
+       - MaterialDocumentYear: <fiscal_year>
+       - PostingDate: <determined in §2.3>
+       - ReverseGoodsMovementReason: <determined in §3.2–§3.4>
 
-The agent MUST capture the reversal material document number from the
-API response.
+5.4  The agent MUST capture the reversal material document number from the
+     API response.
 
-IF the API call fails, the agent MUST update case state to "error",
-log the full error response, and notify the warehouse team.
+5.5  IF the API call fails, the agent MUST update case state to "error",
+     log the full error response, and notify the warehouse team.
 
 ================================================================================
 STEP 6: UPDATE PURCHASE ORDER STATUS
 ================================================================================
 
-After a successful reversal, the agent SHOULD check whether the purchase
-order delivery status needs updating.
+6.1  After a successful reversal, the agent SHOULD check whether the purchase
+     order delivery status needs updating.
 
-  IF the reversal reduces the total received quantity below the ordered
-  quantity, the PO line item delivery status MAY revert to "partially
-  delivered" or "open". This is typically handled automatically by SAP.
+6.2  IF the reversal reduces the total received quantity below the ordered
+     quantity, the PO line item delivery status MAY revert to "partially
+     delivered" or "open". SAP typically handles this automatically.
 
-The agent MUST NOT manually modify PO delivery status fields.
+6.3  The agent MUST NOT manually modify PO delivery status fields.
 
 ================================================================================
 STEP 7: CLOSE CASE
 ================================================================================
 
-The agent MUST update the case state to "complete" with:
-  - reversal_document_number
-  - reversal_posting_date
-  - reversal_reason_code
-  - affected_line_items (list)
+7.1  The agent MUST update the case state to "complete" with:
+       - reversal_document_number
+       - reversal_posting_date
+       - reversal_reason_code
+       - affected_line_items (list)
 
-The agent MUST send a summary notification to the relevant stakeholders.
-
-The notification MUST include:
-  Subject: "GR Reversal Completed — Mat Doc <number> / PO <po_number>"
-  Body fields:
-    - Original material document number and date
-    - Reversal material document number and date
-    - Reversal reason
-    - Affected materials and quantities
-    - Any follow-up actions required
+7.2  The agent MUST send a summary notification to the relevant
+     stakeholders. The notification MUST include:
+       Subject: "GR Reversal Completed — Mat Doc <number> / PO <po_number>"
+       Body fields:
+         - Original material document number and date
+         - Reversal material document number and date
+         - Reversal reason
+         - Affected materials and quantities
+         - Any follow-up actions required
 
 ================================================================================
 ESCALATION RULES
@@ -208,9 +210,9 @@ TOLERANCES (CONFIGURABLE)
 | max_reversal_age_days      | 90        | GRs older than this MUST NOT be      |
 |                            |           | auto-reversed; escalate to finance   |
 | stock_check_tolerance_pct  | 0%        | No tolerance — exact stock required  |
-| auto_post_max_value        | $10,000   | Reversals above this value SHOULD    |
-|                            |           | require supervisor approval even in  |
-|                            |           | full-auto mode                       |
+| auto_post_max_value        | $10,000   | Reversals above this value MUST      |
+|                            |           | route through an approval ticket     |
+|                            |           | before posting (see §5.1)            |
 
 ================================================================================
 REVISION HISTORY
@@ -219,3 +221,7 @@ REVISION HISTORY
 | Version | Date       | Author          | Changes            |
 |---------|------------|-----------------|--------------------|
 | 1.0     | 2026-03-23 | SOP Author Power| Initial release    |
+| 1.1     | 2026-07-28 | SOP Author Power| Ticket approval    |
+|         |            |                 | gate replaces the  |
+|         |            |                 | removed action-mode|
+| 1.2     | 2026-08-03 | SOP Author Power| N.N clause anchors |

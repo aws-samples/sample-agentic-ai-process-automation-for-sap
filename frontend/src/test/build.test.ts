@@ -175,8 +175,10 @@ describe("Build Output Tests", () => {
         jsFiles.forEach(file => {
           const filePath = join(assetsPath, file)
           const stats = statSync(filePath)
-          // Threshold guards against runaway growth; it is not the target chunk size.
-          expect(stats.size).toBeLessThan(1.5 * 1024 * 1024)
+          // Rollup's own chunkSizeWarningLimit. Held here as an assertion because
+          // a build warning is easy to scroll past, and the app chunk had grown to
+          // 1,241 kB before anyone did anything about it.
+          expect(stats.size, `${file} exceeds the 500 kB chunk budget`).toBeLessThan(500 * 1024)
         })
       }
     })

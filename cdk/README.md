@@ -3,9 +3,9 @@ Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
 SPDX-License-Identifier: Apache-2.0
 -->
 
-# Fullstack AgentCore Solution Template - Infrastructure
+# Agentic ERP Automation Quickstart - Infrastructure
 
-This directory contains the AWS CDK infrastructure code for deploying the Fullstack AgentCore Solution Template.
+This directory contains the AWS CDK infrastructure code for deploying the Agentic ERP Automation Quickstart.
 
 ## Prerequisites
 

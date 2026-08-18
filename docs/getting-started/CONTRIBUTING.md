@@ -10,10 +10,10 @@ SPDX-License-Identifier: Apache-2.0
 See the [Deployment Guide](DEPLOYMENT.md) for full prerequisites and deployment instructions. The fastest path:
 
 ```bash
-make setup
+python3 launch.py
 ```
 
-This walks you through bootstrap, SAP credentials, and knowledge base sync interactively.
+This walks you through prerequisites, config, deploy, frontend, and the optional SAP and knowledge base steps.
 
 After setup, install the pre-commit hook:
 
@@ -23,20 +23,33 @@ make install-hooks
 
 This auto-generates types, lints, and formats before every commit.
 
+## Two entry points
+
+| | Use it for | Needs |
+|---|---|---|
+| `python3 launch.py` | Deploying and operating the sample | Python only |
+| `make` | Lint, tests, type generation, packaging | GNU make |
+
+Make's deploy and operate targets delegate to the launcher, so they are aliases rather than a second implementation. Use whichever you prefer.
+
 ## Day-to-Day Development
 
-Run `make` to see all available targets. Common ones:
+Run `make` to see every target, or `python3 launch.py --help` for the deploy and operate side. Common ones:
 
-| Task | Command |
-|------|---------|
-| Full redeploy | `make deploy-all` |
-| Deploy CDK only | `make deploy` |
-| Deploy frontend only | `make deploy-frontend` |
-| Refresh Lambdas (after CDK deploy) | `make refresh-lambdas` |
-| Sync SOPs / API docs | `make sync-kb` |
-| Sync SAP credentials | `make sync-sap-secret` |
-| Check autonomy controls | `make autonomy` |
-| Set autonomy | `make autonomy CMD="set trigger-mode auto"` |
+| Task | Command | Make alias |
+|------|---------|------------|
+| Full redeploy | `python3 launch.py deploy` | `make deploy-all` |
+| Deploy CDK only | `python3 launch.py infra` | `make deploy` |
+| Deploy frontend only | `python3 launch.py frontend` | `make deploy-frontend` |
+| Refresh Lambdas (after CDK deploy) | `python3 launch.py refresh` | `make refresh-lambdas` |
+| What is deployed right now | `python3 launch.py status` | `make status` |
+| Continue an interrupted deploy | `python3 launch.py resume` | — |
+| Sync SOPs / API docs | `python3 launch.py sync-kb` | `make sync-kb` |
+| Sync SAP credentials | `python3 launch.py sync-sap` | `make sync-sap-secret` |
+| Check autonomy controls | `python3 launch.py autonomy` | `make autonomy` |
+| Set autonomy | `python3 launch.py autonomy set auto` | `make autonomy CMD="set auto"` |
+
+Deploy commands confirm the target account and Region before writing anything. Pass `--yes` to skip that for unattended runs, or `make deploy-all LAUNCH_ARGS=--yes` through Make.
 
 ### Local Frontend
 
@@ -67,7 +80,7 @@ make sync-sap-secret
 
 ```bash
 make autonomy                                         # show current settings
-make autonomy CMD="set trigger-mode auto"             # auto | manual
+make autonomy CMD="set auto"             # auto | manual
 ```
 
 ## Before Submitting
@@ -114,7 +127,7 @@ make validate
 │   ├── layers/sap_auth/             # Shared SAP auth layer (service-account)
 │   │                                # ── Event processors ──
 │   ├── odata_poller/                # SAP polling (EventBridge) — only component that calls SAP directly
-│   ├── webhook_processor/           # Unified inbound (SES/Slack/Jira/ServiceNow)
+│   ├── webhook_processor/           # Unified inbound (SES/Jira/ServiceNow)
 │   ├── agent_invoker/               # SQS consumer → AgentCore Runtime
 │   ├── exemplar_builder/            # Evaluation exemplar generation
 │   │                                # ── REST APIs (*_api) ──
@@ -137,7 +150,7 @@ make validate
 │   ├── sap-api-docs/                # SAP API documentation
 │   └── prompt-templates/            # SOP authoring prompts (RFC 2119)
 ├── frontend/                        # React app (Amplify Hosting)
-│   └── src/routes/                  # WorkspacePage, AnalyticsDashboard,
+│   └── src/routes/                  # WorkspacePage, AnalyticsDashboard, SettingsPage,
 │                                     # TicketsDashboard, TestDataPage, SapAuthCallback
 ├── cdk/                              # CDK infrastructure (primary)
 │   ├── config.yaml                  # Deployment configuration
@@ -150,8 +163,10 @@ make validate
 ├── types/                            # Shared type definitions (Python + TypeScript generated)
 ├── tests/                            # Pytest unit/integration tests
 ├── test-scripts/                     # Manual integration test scripts
+├── launch.py                         # Deploy and operate the sample (primary entry point)
+├── launcher/                         # Launcher implementation: one module per subcommand
 ├── scripts/                          # Deployment and operational scripts
-│   ├── setup.py                      # First-time guided setup wizard
+│   ├── setup.py                      # Superseded by `python3 launch.py`; kept until the launcher is validated in CI
 │   ├── sync-sap-secret.sh           # Sync SAP credentials to Secrets Manager
 │   ├── sync-knowledge-base.sh       # Sync SOPs + API docs to S3
 │   ├── deploy/                       # deploy-frontend.py, deploy-with-codebuild.py

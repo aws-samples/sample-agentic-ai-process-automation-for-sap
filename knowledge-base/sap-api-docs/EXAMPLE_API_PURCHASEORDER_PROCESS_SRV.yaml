@@ -691,11 +691,11 @@ components:
     PurchaseOrderScheduleLine:
       type: object
       properties:
-        PurchaseOrder:
+        PurchasingDocument:
           type: string
           maxLength: 10
           description: Purchase Order Number
-        PurchaseOrderItem:
+        PurchasingDocumentItem:
           type: string
           maxLength: 5
           description: Purchase Order Item Number

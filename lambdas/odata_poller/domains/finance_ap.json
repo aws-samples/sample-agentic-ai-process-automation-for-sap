@@ -5,7 +5,7 @@
   "entity": "A_SupplierInvoice",
   "filter": "PaymentBlockingReason ne ''",
   "expand": "to_SuplrInvcItemPurOrdRef",
-  "select": "SupplierInvoice,FiscalYear,CompanyCode,DocumentDate,PostingDate,InvoicingParty,InvoiceGrossAmount,DocumentCurrency,PaymentBlockingReason,SupplierInvoiceIDByInvcgParty",
+  "select": "SupplierInvoice,FiscalYear,CompanyCode,DocumentDate,PostingDate,InvoicingParty,InvoiceGrossAmount,DocumentCurrency,PaymentBlockingReason,SupplierInvoiceIDByInvcgParty,to_SuplrInvcItemPurOrdRef",
 
   "iterate": {
     "path": "to_SuplrInvcItemPurOrdRef",

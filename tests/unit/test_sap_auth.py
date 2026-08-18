@@ -85,6 +85,65 @@ class TestServiceAccount:
         mock_aws["sm"].get_secret_value.assert_called_once()
 
 
+class TestNormalizeBaseUrl:
+    """Consumers append /sap/opu/odata/sap themselves; base_url must be bare."""
+
+    HOST = "https://sap.example.com"
+
+    @pytest.mark.parametrize(
+        "raw",
+        [
+            "https://sap.example.com",
+            "https://sap.example.com/",
+            "https://sap.example.com/sap/opu/odata/sap/",
+            "https://sap.example.com/sap/opu/odata/sap",
+            "  https://sap.example.com/sap/opu/odata/sap/  ",
+            "https://sap.example.com/SAP/OPU/ODATA/SAP/",
+        ],
+    )
+    def test_strips_odata_root(self, raw):
+        import sap_auth
+
+        assert sap_auth.normalize_base_url(raw) == self.HOST
+
+    def test_preserves_port_and_path_prefix(self):
+        import sap_auth
+
+        assert (
+            sap_auth.normalize_base_url(
+                "https://sap.example.com:44300/sap/opu/odata/sap/"
+            )
+            == "https://sap.example.com:44300"
+        )
+
+    def test_leaves_unrelated_path_alone(self):
+        import sap_auth
+
+        # Only the OData root is special — an unrelated suffix must survive.
+        assert (
+            sap_auth.normalize_base_url("https://sap.example.com/gateway")
+            == "https://sap.example.com/gateway"
+        )
+
+    def test_applied_to_secret_value(self, mock_aws):
+        """The doubled-path bug: an OData-root secret must still yield a bare host."""
+        import sap_auth
+
+        sap_auth._sap_creds = None
+        mock_aws["sm"].get_secret_value.return_value = {
+            "SecretString": json.dumps(
+                {**SAP_CREDS, "base_url": f"{self.HOST}/sap/opu/odata/sap/"}
+            )
+        }
+
+        _, base_url = sap_auth.get_sap_session()
+
+        assert base_url == self.HOST
+        # The poller's exact join must not double the service root.
+        url = f"{base_url}/sap/opu/odata/sap/API_X/E"
+        assert url == f"{self.HOST}/sap/opu/odata/sap/API_X/E"
+
+
 class TestSanitizeError:
     def test_strips_password(self):
         import sap_auth

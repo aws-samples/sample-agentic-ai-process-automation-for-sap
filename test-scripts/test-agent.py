@@ -13,13 +13,13 @@ Tests agent invocation with conversation continuity:
 
 Usage:
     # Remote agent testing (prompts for credentials)
-    uv run scripts/test-agent.py
+    uv run test-scripts/test-agent.py
 
     # Local agent testing (agent must be running on localhost:8080)
-    uv run scripts/test-agent.py --local
+    uv run test-scripts/test-agent.py --local
 
     # Override pattern from config
-    uv run scripts/test-agent.py --pattern agent
+    uv run test-scripts/test-agent.py --pattern agent
 """
 
 import argparse
@@ -384,13 +384,13 @@ def parse_arguments() -> argparse.Namespace:
         epilog="""
 Examples:
   # Remote agent (prompts for credentials)
-  uv run scripts/test-agent.py
+  uv run test-scripts/test-agent.py
   
   # Local agent on localhost:8080 (uses pattern from config.yaml)
-  uv run scripts/test-agent.py --local
+  uv run test-scripts/test-agent.py --local
   
   # Override pattern for local testing
-  uv run scripts/test-agent.py --local --pattern agent
+  uv run test-scripts/test-agent.py --local --pattern agent
 
 Notes:
   - Remote mode: Tests deployed agent

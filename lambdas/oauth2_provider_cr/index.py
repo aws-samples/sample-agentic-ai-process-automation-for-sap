@@ -27,6 +27,18 @@ bedrock_client = boto3.client("bedrock-agentcore-control")
 secrets_client = boto3.client("secretsmanager")
 
 
+def _get_secret_value(secret_arn: str) -> str:
+    """Read the client secret.
+
+    An AccessDenied here is worth reading literally before suspecting IAM: Secrets
+    Manager returns it — not ResourceNotFoundException — for an identifier that
+    resolves to nothing, to avoid telling an unauthorized caller a secret exists.
+    A truncated ARN (missing the 6-char suffix) is the usual culprit, which
+    assertSecretResolves in cdk/lib/utils/cfn-outputs-resolver.ts now catches at
+    synth for the external-stack path."""
+    return secrets_client.get_secret_value(SecretId=secret_arn)["SecretString"]
+
+
 def handler(event: dict, context: dict) -> dict:
     """
     CloudFormation Custom Resource handler for OAuth2 Credential Provider.
@@ -96,8 +108,7 @@ def handle_create(props: dict) -> dict:
     secret_arn = props["ClientSecretArn"]
     logger.info(f"Retrieving secret from: {secret_arn}")
 
-    secret_response = secrets_client.get_secret_value(SecretId=secret_arn)
-    raw_secret = secret_response["SecretString"]
+    raw_secret = _get_secret_value(secret_arn)
 
     # Support two formats:
     #  - plain string  -> the client secret itself (Cognito client secret)
@@ -145,8 +156,7 @@ def handle_update(event: dict, props: dict) -> dict:
     secret_arn = props["ClientSecretArn"]
     logger.info(f"Retrieving secret from: {secret_arn}")
 
-    secret_response = secrets_client.get_secret_value(SecretId=secret_arn)
-    raw_secret = secret_response["SecretString"]
+    raw_secret = _get_secret_value(secret_arn)
 
     # Support two formats:
     #  - plain string  -> the client secret itself (Cognito client secret)

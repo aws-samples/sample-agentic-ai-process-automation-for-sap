@@ -5,6 +5,10 @@ import {
   CloudFormationClient,
   DescribeStacksCommand,
 } from "@aws-sdk/client-cloudformation"
+import {
+  DescribeSecretCommand,
+  SecretsManagerClient,
+} from "@aws-sdk/client-secrets-manager"
 import { SapMcpExternalStackConfig } from "./config-manager"
 
 /** Minimal shape of a describe-stacks result we depend on (testable without SDK types). */
@@ -202,8 +206,48 @@ export async function resolveExternalStack(
     throw new Error(`External SAP MCP stack '${cfg.stack_name}' not found.`)
   }
   const { stack_name, ...overrides } = cfg
-  return mapExternalStackInfo(
+  const info = mapExternalStackInfo(
     { Outputs: stack.Outputs, Parameters: stack.Parameters },
     overrides
   )
+  await assertSecretResolves(info.inboundClientSecretArn, stackRegion)
+  return info
+}
+
+/**
+ * Confirm the configured inbound client secret identifier actually resolves.
+ *
+ * Secrets Manager accepts a bare name or a COMPLETE ARN — one ending in the
+ * 6-character suffix it appends at creation. An ARN truncated to just the name
+ * is neither and matches nothing, but that failure is near-undiagnosable at
+ * deploy time: GetSecretValue answers AccessDenied ("no identity-based policy
+ * allows...") rather than ResourceNotFoundException, so as not to reveal to an
+ * unauthorized caller whether the secret exists. Everything then points at IAM,
+ * where nothing is wrong — the `${arn}*` grant in sap-mcp-stack.ts matches the
+ * truncated string, and simulate-principal-policy reports "allowed" because it
+ * only string-matches and never checks existence.
+ *
+ * This cannot be a string check: a truncated ARN is indistinguishable from a
+ * complete one whenever the name's last segment is itself six alphanumerics
+ * (`...-dzuf01` was exactly that). Only a real lookup tells them apart, and only
+ * from the deployer's credentials — the Lambda's scoped role gets the same
+ * ambiguous AccessDenied either way.
+ */
+export async function assertSecretResolves(arn?: string, region?: string): Promise<void> {
+  if (!arn) return
+  const client = new SecretsManagerClient(region ? { region } : {})
+  try {
+    await client.send(new DescribeSecretCommand({ SecretId: arn }))
+  } catch (e: unknown) {
+    // Anything other than not-found (AccessDenied on the deployer, throttling,
+    // no credentials) is not evidence of a bad identifier — don't block synth.
+    if ((e as { name?: string }).name !== "ResourceNotFoundException") return
+    throw new Error(
+      `External SAP MCP stack: client secret '${arn}' resolves to no secret in ` +
+        `${region || "the deploy region"}. A hand-copied ARN is usually missing the ` +
+        `6-character suffix Secrets Manager appends (e.g. '...-KRbD6g'); get the exact value ` +
+        `with 'aws secretsmanager describe-secret --secret-id <name> --query ARN'. Left ` +
+        `unfixed this surfaces at deploy as a misleading AccessDenied on GetSecretValue.`
+    )
+  }
 }

@@ -7,13 +7,17 @@ import type { TraceSegment } from "@/types/generated-cases"
 // Constants
 // ---------------------------------------------------------------------------
 
+// Chart data-series palette. These are hex, not tokens, on purpose: they feed SVG
+// `fill`/`stroke` (not className), each hue is a stated meaning (which tool ran),
+// and the weights read on both grounds — the same rationale the token file gives
+// for keeping `--chart-*` as raw values. Status colour still comes from statusTone.
 export const TOOL_COLORS: Record<string, string> = {
   sap_read: "#3b82f6", // blue
-  sap_write: "#f59e0b", // amber
-  update_case_state: "#10b981", // green
+  sap_write: "#c98003", // amber
+  update_case_state: "#01a471", // green
   send_notification: "#8b5cf6", // purple
   query_knowledge_base: "#ec4899", // pink
-  get_odata_spec: "#06b6d4", // cyan
+  get_odata_spec: "#019eb8", // cyan
 }
 
 const DEFAULT_TOOL_COLOR = "#6b7280" // gray
@@ -37,11 +41,11 @@ export function sortAndLimitTraces(traces: TraceRecord[], limit: number): TraceR
 export function getOutcomeColor(outcome: string | undefined): string {
   switch (outcome) {
     case "complete":
-      return "#10b981" // green
+      return "#01a471" // green
     case "error":
       return "#ef4444" // red
     case "cancelled":
-      return "#f59e0b" // yellow
+      return "#c98003" // yellow
     default:
       return "#6b7280" // gray
   }

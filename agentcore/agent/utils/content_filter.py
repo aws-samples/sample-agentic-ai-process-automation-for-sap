@@ -35,7 +35,7 @@ def sanitize_external_content(text: str, source: str = "unknown") -> str:
 
     Args:
         text: Untrusted text from SAP, email, webhook, etc.
-        source: Label for logging (e.g. "ses", "slack", "sap").
+        source: Label for logging (e.g. "ses", "jira", "sap").
 
     Returns:
         Sanitized text with injection patterns replaced by [FILTERED].

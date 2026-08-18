@@ -85,24 +85,50 @@ def resolve_profile(name: str, catalog: dict | None = None) -> ResolvedProfile:
 	)
 
 
+def _selected_values(profile: ResolvedProfile) -> dict[str, list[str]]:
+	return {
+		"frontend": [profile.frontend],
+		"inbound": [profile.inbound],
+		"mode": list(profile.mode),
+		"outbound": [profile.outbound],
+	}
+
+
 def stubbed_axes(profile: ResolvedProfile, catalog: dict | None = None) -> list[str]:
 	"""Axis names whose SELECTED value is status:stub (IaC module not yet built).
 
 	status defaults to 'live' when absent. mode is a list -> flagged if ANY
 	selected mode value is stub. Order: frontend, inbound, mode, outbound."""
 	cat = catalog or load_catalog()
-	selected = {
-		"frontend": [profile.frontend],
-		"inbound": [profile.inbound],
-		"mode": list(profile.mode),
-		"outbound": [profile.outbound],
-	}
+	selected = _selected_values(profile)
 	stubs: list[str] = []
 	for axis in _AXES:
 		metas = (cat["axes"][axis][v] for v in selected[axis])
 		if any(m.get("status", "live") == "stub" for m in metas):
 			stubs.append(axis)
 	return stubs
+
+
+def stub_blockers(
+	profile: ResolvedProfile, catalog: dict | None = None
+) -> dict[str, str]:
+	"""Map each stub axis to WHY it is stub: repo | operator | upstream.
+
+	Without this, `stub_axes: [frontend, inbound]` reads as "unbuilt" for every
+	axis, which misreports axes whose wiring exists and is only awaiting external
+	config. Defaults to 'repo' (the strict reading) when blocked_by is absent, so
+	an unannotated stub is never flattered."""
+	cat = catalog or load_catalog()
+	selected = _selected_values(profile)
+	blockers: dict[str, str] = {}
+	for axis in stubbed_axes(profile, cat):
+		# mode is a list; a stub axis has >=1 stub member — report the first one's cause.
+		for v in selected[axis]:
+			meta = cat["axes"][axis][v]
+			if meta.get("status", "live") == "stub":
+				blockers[axis] = meta.get("blocked_by", "repo")
+				break
+	return blockers
 
 
 _OBO = {"obo", "obo-okta"}
@@ -137,9 +163,9 @@ def validate_profile(profile: ResolvedProfile, *, mcp_path: bool = False) -> Non
 
 	# A user-identity outbound (UF/OBO) needs a mode where a user is/was present to
 	# authorize. Autonomous-only profiles have no user -> cannot federate or
-	# token-exchange. NOTE: the reverse is NOT enforced -- live/batch MAY use
-	# Basic/M2M (service identity, no per-user SAP propagation); that is legal, just
-	# not identity-propagating.
+	# token-exchange. NOTE: the reverse is NOT enforced -- `live` MAY use Basic/M2M
+	# (service identity, no per-user SAP propagation); that is legal, just not
+	# identity-propagating. `batch` is the exception, constrained by the rule below.
 	if profile.outbound in _USER_IDENTITY_OUTBOUND and not (
 		_USER_IDENTITY_MODES & set(profile.mode)
 	):
@@ -148,10 +174,21 @@ def validate_profile(profile: ResolvedProfile, *, mcp_path: bool = False) -> Non
 			f"user-identity mode (live or batch); profile mode {profile.mode} has none."
 		)
 
-	if "batch" in profile.mode and not out_meta.get("supports_refresh"):
+	# Refresh is required by acting as an ABSENT HUMAN, not by being unattended. A
+	# service identity re-mints on demand (client_credentials), so batch over
+	# basic/m2m needs no stored token. Only a user-identity outbound must survive the
+	# session that authorized it, and OBO cannot: it is just-in-time and rejects an
+	# exchange with no inbound token, leaving `user-federation` as the only
+	# user-identity outbound that can.
+	if (
+		"batch" in profile.mode
+		and profile.outbound in _USER_IDENTITY_OUTBOUND
+		and not out_meta.get("supports_refresh")
+	):
 		raise ProfileValidationError(
-			f"mode 'batch' requires an outbound that supports token refresh; "
-			f"{profile.outbound!r} does not."
+			f"mode 'batch' with user-identity outbound {profile.outbound!r} requires "
+			f"token refresh, which {profile.outbound!r} does not support (no stored "
+			f"credential outlives the authorizing session)."
 		)
 
 	# mcp_supported: false blocks a Gateway-mediated SAP MCP target (the Gateway

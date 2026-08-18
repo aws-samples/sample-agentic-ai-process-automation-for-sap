@@ -1,9 +1,9 @@
 // Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
-"use client"
-
 import { AlertTriangle, XCircle, Info } from "lucide-react"
+import { cn } from "@/lib/utils"
+import { TONE_BANNER, type StatusTone } from "@/lib/statusTone"
 
 type AlertLevel = "warning" | "error" | "info"
 
@@ -12,41 +12,25 @@ interface AgentAlertProps {
   children: React.ReactNode
 }
 
-const STYLES: Record<
-  AlertLevel,
-  { icon: typeof Info; border: string; bg: string; text: string; iconColor: string }
-> = {
-  warning: {
-    icon: AlertTriangle,
-    border: "border-amber-400",
-    bg: "bg-amber-50",
-    text: "text-amber-800",
-    iconColor: "text-amber-500",
-  },
-  error: {
-    icon: XCircle,
-    border: "border-red-400",
-    bg: "bg-red-50",
-    text: "text-red-800",
-    iconColor: "text-red-500",
-  },
-  info: {
-    icon: Info,
-    border: "border-blue-400",
-    bg: "bg-blue-50",
-    text: "text-blue-800",
-    iconColor: "text-blue-500",
-  },
+// Colour comes from the shared tone vocabulary — this maps the alert's three
+// levels onto it rather than carrying its own palette.
+const LEVEL: Record<AlertLevel, { icon: typeof Info; tone: StatusTone }> = {
+  warning: { icon: AlertTriangle, tone: "progress" },
+  error: { icon: XCircle, tone: "danger" },
+  info: { icon: Info, tone: "info" },
 }
 
 export function AgentAlert({ level, children }: AgentAlertProps) {
-  const s = STYLES[level]
-  const Icon = s.icon
+  const { icon: Icon, tone } = LEVEL[level]
   return (
     <div
-      className={`flex items-start gap-2 rounded-md border-l-4 ${s.border} ${s.bg} px-3 py-2 my-2 text-xs ${s.text}`}
+      role={level === "error" ? "alert" : "status"}
+      className={cn(
+        "my-2 flex items-start gap-2 rounded-md border-l-4 px-3 py-2 text-xs",
+        TONE_BANNER[tone]
+      )}
     >
-      <Icon size={14} className={`flex-none mt-0.5 ${s.iconColor}`} />
+      <Icon size={14} className="mt-0.5 flex-none" />
       <div className="flex-1">{children}</div>
     </div>
   )

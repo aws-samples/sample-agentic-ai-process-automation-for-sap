@@ -37,4 +37,5 @@ Scaffolds all files needed to add a new SAP domain to the agent system.
 ## See Also
 
 - [Adding Use Cases Guide](../../../docs/extending/ADDING_USE_CASES.md) — full checklist and architecture context
+- [Author Skill Power](../author-skill-power/) — authors `config.json` + `base_prompt.txt` (including the `constants` block this power's 3a/3b steps generate)
 - [Author SOP Power](../author-sop-power/) — RFC 2119 SOP authoring (used by this power for SOP drafts)

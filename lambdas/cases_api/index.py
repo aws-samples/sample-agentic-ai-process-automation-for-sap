@@ -18,6 +18,9 @@ from decimal import Decimal
 
 import boto3
 
+# Canonical case identity codec — ships in the shared_types layer.
+from case_key import CaseKeyError, to_case_key
+
 # WorkItem model + validator ship in the shared_types Lambda layer. Best-effort
 # import: absent in local dev/test (validation no-ops), present in the Lambda.
 try:
@@ -79,27 +82,24 @@ def handler(event: dict, context: object) -> dict:
     logger.info("Request: %s %s", method, path)
 
     try:
-        if (
-            method == "PUT"
-            and params.get("doc")
-            and params.get("item")
-            and path.endswith("/rating")
-        ):
-            return _save_rating(params["doc"], params["item"], event, origin)
+        # A malformed identity is a 400 here rather than a miss further in: the
+        # codec is the only thing that turns a path parameter into a table key.
+        raw_case_id = params.get("case_id")
+        case_key = None
+        if raw_case_id:
+            try:
+                case_key = to_case_key(raw_case_id)
+            except CaseKeyError:
+                return _response(400, {"error": "Invalid case_id"}, origin)
 
-        if (
-            method == "POST"
-            and params.get("doc")
-            and params.get("item")
-            and path.endswith("/traces")
-        ):
-            return _save_trace(params["doc"], params["item"], event, origin)
+        if method == "PUT" and case_key and path.endswith("/rating"):
+            return _save_rating(case_key, event, origin)
 
-        if params.get("doc") and params.get("item"):
-            resp = table.get_item(
-                Key={"document_number": params["doc"], "item_id": params["item"]},
-                ConsistentRead=True,
-            )
+        if method == "POST" and case_key and path.endswith("/traces"):
+            return _save_trace(case_key, event, origin)
+
+        if case_key:
+            resp = table.get_item(Key=case_key, ConsistentRead=True)
             item = resp.get("Item")
             if not item:
                 return _response(404, {"error": "Case not found"}, origin)
@@ -154,7 +154,7 @@ def handler(event: dict, context: object) -> dict:
         return _response(500, {"error": str(e)}, origin)
 
 
-def _save_trace(doc: str, item: str, event: dict, origin: str) -> dict:
+def _save_trace(case_key: dict, event: dict, origin: str) -> dict:
     """Append an agent trace to a case's agent_traces list in DynamoDB."""
     try:
         body = json.loads(event.get("body", "{}"))
@@ -166,20 +166,20 @@ def _save_trace(doc: str, item: str, event: dict, origin: str) -> dict:
 
     try:
         table.update_item(
-            Key={"document_number": doc, "item_id": item},
+            Key=case_key,
             UpdateExpression="SET agent_traces = list_append(if_not_exists(agent_traces, :empty), :trace)",
             ExpressionAttributeValues={
                 ":empty": [],
                 ":trace": [body],
             },
-            ConditionExpression="attribute_exists(document_number)",
+            ConditionExpression="attribute_exists(case_id)",
         )
         return _response(200, {"saved": True, "trace_id": body["trace_id"]}, origin)
     except dynamodb.meta.client.exceptions.ConditionalCheckFailedException:
         return _response(404, {"error": "Case not found"}, origin)
 
 
-def _save_rating(doc: str, item: str, event: dict, origin: str) -> dict:
+def _save_rating(case_key: dict, event: dict, origin: str) -> dict:
     """Save a case-level resolution rating."""
     try:
         body = json.loads(event.get("body", "{}"))
@@ -207,10 +207,10 @@ def _save_rating(doc: str, item: str, event: dict, origin: str) -> dict:
 
     try:
         table.update_item(
-            Key={"document_number": doc, "item_id": item},
+            Key=case_key,
             UpdateExpression=update_expr,
             ExpressionAttributeValues=expr_values,
-            ConditionExpression="attribute_exists(document_number)",
+            ConditionExpression="attribute_exists(case_id)",
         )
         return _response(200, {"saved": True, "rating": rating}, origin)
     except dynamodb.meta.client.exceptions.ConditionalCheckFailedException:

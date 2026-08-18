@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { getConfig } from "@/lib/config"
+import { apiFetch } from "@/lib/apiFetch"
 
 export interface FeedbackPayload {
   sessionId: string
@@ -20,20 +21,10 @@ export async function submitFeedback(
   idToken: string
 ): Promise<FeedbackResponse> {
   const { apiUrl } = await getConfig()
-
-  const response = await fetch(`${apiUrl}/feedback`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${idToken}`,
-    },
-    body: JSON.stringify(payload),
-  })
-
-  if (!response.ok) {
-    const errorData = await response.json().catch(() => ({}))
-    throw new Error(errorData.error || `HTTP error! status: ${response.status}`)
-  }
-
-  return response.json()
+  return apiFetch(
+    `${apiUrl}/feedback`,
+    { token: idToken, method: "POST", body: payload },
+    "HTTP error! status",
+    async res => (await res.json().catch(() => ({}))).error
+  )
 }

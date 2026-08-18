@@ -22,7 +22,7 @@ machine user.
 |------|-------------|---------|
 | Create user | `SU01` | Type: **System** (non-dialog). Username: e.g. `SVC_ERP_AGENT` |
 | Assign roles | `SU01` → Roles tab | Assign roles that grant access to the OData services below |
-| Set password | `SU01` → Logon Data tab | Set initial password. Sync to AWS with `./scripts/sync-sap-secret.sh` |
+| Set password | `SU01` → Logon Data tab | Set initial password. Sync to AWS with `python3 launch.py sync-sap` |
 
 ### Required OData service authorizations
 

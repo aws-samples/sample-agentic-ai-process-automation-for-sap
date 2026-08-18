@@ -55,7 +55,6 @@ if [[ -n "$CURRENT_WH" && "$FORCE" != "--force" ]]; then
 fi
 
 case "$CHANNEL" in
-  slack)       info "Slack: paste the Signing Secret from App admin → Basic Information." ;;
   jira)        info "Jira: paste the secret you set when creating the webhook." ;;
   servicenow)  info "ServiceNow: paste the shared auth token from your outbound REST config." ;;
 esac

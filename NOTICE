@@ -87,6 +87,7 @@ FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
   - react — Copyright Meta Platforms, Inc. and affiliates
   - react-dom — Copyright Meta Platforms, Inc. and affiliates
   - react-router-dom — Copyright Remix Software, Inc.
+  - @tanstack/react-query — Copyright Tanner Linsley
   - react-markdown — Copyright Espen Hovlandsdal
   - remark-gfm — Copyright Titus Wormer
   - react-syntax-highlighter — Copyright Conor Hastings

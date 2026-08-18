@@ -5,7 +5,7 @@ SPDX-License-Identifier: Apache-2.0
 
 # Documentation
 
-Start here. Most people need only the first two sections.
+Start here. For one consolidated architectural and implementation reference, use [Technical Context and Decision Reference](TECHNICAL_CONTEXT.md). For task-specific guidance, most people need only the first two sections below.
 
 ## New here? Read in this order
 
@@ -71,7 +71,8 @@ Not sure which to use? Each doc opens with a "which guide do I need?" block.
 | Document | Topic |
 |----------|-------|
 | [Quick Start](evaluations/EVALUATIONS_QUICKSTART.md) | Run the regression suite; set up online evals (start here) |
-| [Cost Benchmark](evaluations/COST_BENCHMARK.md) | The ~$0.26/case baseline and methodology |
+| [Cost Benchmark](evaluations/COST_BENCHMARK.md) | Historical ~$0.26/case baseline and methodology |
+| [August 2026 Benchmark Analysis](evaluations/AP_COST_BENCHMARK_2026_08.md) | Why the lifecycle-complete rerun reached ~$0.52/case and what changed |
 | [Inference Cost Optimization](evaluations/INFERENCE_COST_OPTIMIZATION.md) | Six levers to drive per-case cost down to ~$0.08 |
 | [Full Guide](evaluations/AGENTCORE_EVALUATIONS_GUIDE.md) | Deep reference: custom evaluators for this agent |
 
@@ -87,7 +88,7 @@ Not sure which to use? Each doc opens with a "which guide do I need?" block.
 
 Architecture Decision Records capture *why* the system is built the way it is. Newcomers can skip these; reach for one when a design choice is unclear. [ADR-012](design-decisions/012-sap-mcp-server-integration.md) is the current ground truth for SAP integration; [ADR-003](design-decisions/003-domain-skills-s3-sops.md) explains the skill system.
 
-See [design-decisions/](design-decisions/) for all ADRs (001–012). ADRs 008, 010, and 011 are marked historical — superseded by ADR-012.
+See [design-decisions/](design-decisions/) for all ADRs (001–014). ADRs 008, 010, and 011 are historical or partly superseded by ADR-012; ADR-013 supersedes ADR-002's OpenSearch Serverless storage choice; ADR-014 covers SOP corpus granularity and chunking strategy.
 
 ## Comparison Docs
 

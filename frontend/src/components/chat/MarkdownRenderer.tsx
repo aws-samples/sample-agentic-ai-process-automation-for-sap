@@ -1,13 +1,17 @@
 // Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
-"use client"
-
 import { useState } from "react"
 import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
-import { Prism as SyntaxHighlighter } from "react-syntax-highlighter"
-import { oneLight } from "react-syntax-highlighter/dist/esm/styles/prism"
+// PrismAsyncLight, not Prism: the eager build statically imports `refractor/all`,
+// which is ~960 kB of Prism grammars for every language in existence — the single
+// largest thing in the bundle, for code fences the agent emits occasionally. The
+// async variant fetches refractor/core plus one grammar per language on demand.
+// Unsupported languages fall back to unhighlighted `text` rather than throwing.
+import SyntaxHighlighter from "react-syntax-highlighter/dist/esm/prism-async-light"
+// Deep import of the one theme; the styles barrel re-exports all 40-odd of them.
+import oneLight from "react-syntax-highlighter/dist/esm/styles/prism/one-light"
 import { Copy, Check } from "lucide-react"
 
 function completePartialMarkdown(text: string): string {
@@ -43,7 +47,7 @@ const components: Record<string, any> = {
     const codeString = String(children).replace(/\n$/, "")
     if (match) {
       return (
-        <div className="my-2 rounded-md overflow-hidden border border-border bg-white">
+        <div className="my-2 rounded-md overflow-hidden border border-border bg-card">
           <div className="flex items-center justify-between px-3 py-1 bg-muted border-b border-border">
             <span className="text-xs text-muted-foreground">{match[1]}</span>
             <CopyButton text={codeString} />
@@ -70,6 +74,21 @@ const components: Record<string, any> = {
   },
   pre({ children }: { children?: React.ReactNode }) {
     return <>{children}</>
+  },
+  // Prose links live here rather than in a global `a` rule, which used to leak
+  // onto every router <Link>. External hrefs open in a new tab with noreferrer:
+  // this content is model-generated, so the URL is untrusted input.
+  a({ href, children }: { href?: string; children?: React.ReactNode }) {
+    const external = /^https?:\/\//i.test(href ?? "")
+    return (
+      <a
+        href={href}
+        {...(external ? { target: "_blank", rel: "noopener noreferrer" } : {})}
+        className="text-link underline decoration-1 underline-offset-2 hover:no-underline"
+      >
+        {children}
+      </a>
+    )
   },
 }
 

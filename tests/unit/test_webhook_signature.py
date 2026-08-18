@@ -10,7 +10,6 @@ import hashlib
 import hmac
 import json
 import sys
-import time
 from pathlib import Path
 from unittest.mock import patch
 
@@ -48,72 +47,10 @@ def _make_event(body: str, headers: dict | None = None, b64: bool = False) -> di
     }
 
 
-def _slack_signature(secret: str, body: str, ts: str) -> str:
-    sig_base = f"v0:{ts}:{body}".encode()
-    return "v0=" + hmac.new(secret.encode(), sig_base, hashlib.sha256).hexdigest()
-
-
 def _jira_signature(secret: str, body: str) -> str:
     return (
         "sha256=" + hmac.new(secret.encode(), body.encode(), hashlib.sha256).hexdigest()
     )
-
-
-class TestSlackVerification:
-    SECRET = "slack-test-secret"
-
-    def test_valid_signature(self):
-        with (
-            patch.object(wp, "WEBHOOK_SECRET", self.SECRET),
-            patch.object(wp, "CHANNEL", "slack"),
-        ):
-            body = json.dumps({"event": {"type": "message", "text": "hello"}})
-            ts = str(int(time.time()))
-            sig = _slack_signature(self.SECRET, body, ts)
-            event = _make_event(
-                body, {"x-slack-signature": sig, "x-slack-request-timestamp": ts}
-            )
-            assert wp._verify_webhook_signature(event) is None
-
-    def test_invalid_signature(self):
-        with (
-            patch.object(wp, "WEBHOOK_SECRET", self.SECRET),
-            patch.object(wp, "CHANNEL", "slack"),
-        ):
-            body = json.dumps({"event": {"type": "message", "text": "hello"}})
-            ts = str(int(time.time()))
-            event = _make_event(
-                body, {"x-slack-signature": "v0=bad", "x-slack-request-timestamp": ts}
-            )
-            assert wp._verify_webhook_signature(event)["statusCode"] == 401
-
-    def test_replay_attack_rejected(self):
-        with (
-            patch.object(wp, "WEBHOOK_SECRET", self.SECRET),
-            patch.object(wp, "CHANNEL", "slack"),
-        ):
-            body = json.dumps({"event": {"type": "message"}})
-            old_ts = str(int(time.time()) - 600)
-            sig = _slack_signature(self.SECRET, body, old_ts)
-            event = _make_event(
-                body, {"x-slack-signature": sig, "x-slack-request-timestamp": old_ts}
-            )
-            assert wp._verify_webhook_signature(event)["statusCode"] == 401
-
-    def test_base64_body(self):
-        with (
-            patch.object(wp, "WEBHOOK_SECRET", self.SECRET),
-            patch.object(wp, "CHANNEL", "slack"),
-        ):
-            body = json.dumps({"event": {"type": "message", "text": "b64"}})
-            ts = str(int(time.time()))
-            sig = _slack_signature(self.SECRET, body, ts)
-            event = _make_event(
-                body,
-                {"x-slack-signature": sig, "x-slack-request-timestamp": ts},
-                b64=True,
-            )
-            assert wp._verify_webhook_signature(event) is None
 
 
 class TestJiraVerification:
@@ -171,7 +108,7 @@ class TestNoSecretConfigured:
     def test_skips_verification_with_warning(self):
         with (
             patch.object(wp, "WEBHOOK_SECRET", ""),
-            patch.object(wp, "CHANNEL", "slack"),
+            patch.object(wp, "CHANNEL", "jira"),
         ):
             event = _make_event("{}", {})
             assert wp._verify_webhook_signature(event) is None

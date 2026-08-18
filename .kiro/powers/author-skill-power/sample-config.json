@@ -1,0 +1,52 @@
+{
+  "skill_id": "finance_ar_collections",
+  "display_name": "Finance — AR Collections",
+  "description": "Accounts receivable collections: triage past-due accounts, classify disputes, route to resolution owners, detect resolution events.",
+  "model_tier": "sonnet",
+  "max_turns": 15,
+  "multi_agent": false,
+  "orchestrator_tier": "haiku",
+  "specialist_tier": "sonnet",
+  "sap_service": {
+    "service": "API_OPLACCTGDOCITEMCUBE_SRV",
+    "entities": {
+      "ar_open_item": "A_OperationalAcctgDocItemCube",
+      "customer": "A_BusinessPartner"
+    }
+  },
+  "constants": {
+    "TIER_1_DOLLAR": 50000,
+    "TIER_2_DOLLAR": 5000,
+    "TIER_1_SCORE": 60,
+    "TIER_2_SCORE": 35,
+    "WEIGHT_DOLLAR": 0.35,
+    "WEIGHT_AGE": 0.30,
+    "WEIGHT_HISTORY": 0.20,
+    "WEIGHT_COMPLEXITY": 0.15,
+    "SLA_ROUTING_RESPONSE_DAYS": 3,
+    "SLA_ESCALATION_MANAGER_DAYS": 5,
+    "SLA_ESCALATION_CONTROLLER_DAYS": 7,
+    "SLA_BROKEN_PROMISE_DAYS": 5,
+    "CATEGORIZATION_CONFIDENCE_MIN": 80,
+    "STALE_DISPUTE_DAYS": 14,
+    "RECONCILIATION_MISMATCH_MAX_PCT": 5
+  },
+  "gateway_tools": [
+    "get_case_state",
+    "update_case_state",
+    "search_sap_sops",
+    "search_sap_api_docs",
+    "send_notification",
+    "find_sap_services",
+    "get_metadata",
+    "get_service_hints",
+    "odata_read",
+    "odata_count"
+  ],
+  "process_type_to_sop": {
+    "collections": "finance_ar_collections/collections.txt",
+    "ar_dispute": "finance_ar_collections/collections.txt",
+    "short_payment": "finance_ar_collections/collections.txt",
+    "billing_question": "finance_ar_collections/collections.txt"
+  }
+}

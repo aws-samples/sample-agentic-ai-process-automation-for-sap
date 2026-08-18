@@ -13,7 +13,8 @@ export interface Ticket {
    */
   assigned_to?: null | string
   /**
-   * Related ERP case ID for correlation (doc#item format).
+   * Related ERP case identity for correlation, canonical {document_number}-{item_id} form.
+   * Built and parsed only via the case_key codec.
    */
   case_id?: null | string
   /**

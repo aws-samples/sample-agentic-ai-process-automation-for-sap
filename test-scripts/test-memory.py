@@ -13,10 +13,10 @@ Tests short-term memory operations:
 
 Usage:
     # Auto-discover memory from nested stack
-    uv run scripts/test-memory.py
+    uv run test-scripts/test-memory.py
 
     # Use specific memory ARN
-    uv run scripts/test-memory.py --memory-arn <arn>
+    uv run test-scripts/test-memory.py --memory-arn <arn>
 
 API References:
     - Control Plane: https://boto3.amazonaws.com/v1/documentation/api/1.40.0/reference/services/bedrock-agentcore-control.html
@@ -359,10 +359,10 @@ def parse_arguments() -> argparse.Namespace:
         epilog="""
 Examples:
   # Auto-discover memory from nested stack
-  uv run scripts/test-memory.py
+  uv run test-scripts/test-memory.py
   
   # Use specific memory ARN
-  uv run scripts/test-memory.py --memory-arn arn:aws:bedrock-agentcore:us-east-1:123456789:memory/abc123
+  uv run test-scripts/test-memory.py --memory-arn arn:aws:bedrock-agentcore:us-east-1:123456789:memory/abc123
         """,
     )
 

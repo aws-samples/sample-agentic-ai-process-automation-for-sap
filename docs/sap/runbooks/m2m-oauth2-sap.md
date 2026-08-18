@@ -211,10 +211,12 @@ using the Gateway unchanged.)
 > pool**, not your own — else the runtime **401s** (`iss` mismatch). This is distinct from the
 > outbound provider in A2. See the SAP MCP integration reference's "401 in external mode" note.
 
-> **Inbound coherence (external-IdP variant).** M2M is **not** OBO: if you point the external stack
-> at an **EntraId/OBO** inbound authorizer while running an M2M flow, a machine token will be
-> rejected by that inbound authorizer. Pick a Cognito/M2M inbound for the external stack, or use the
-> OBO path. This is the AWS-side mirror of the SAP-side issuer/audience trap.
+> **Inbound coherence (external-IdP variant).** If you point the external stack at an **EntraId**
+> inbound authorizer while running an M2M flow, the machine token your Gateway mints against your own
+> Cognito pool is rejected on `iss`. Pick a Cognito inbound for the external stack. This is the
+> *inbound* axis alone — `InboundAuthProvider` and `AuthFlow` are independent CFN parameters, so an
+> `EntraId`-inbound stack can carry any outbound flow. The AWS-side mirror of the SAP-side
+> issuer/audience trap.
 
 ---
 
@@ -245,7 +247,7 @@ using the Gateway unchanged.)
 | **SAP 401** (M2M via SOAUTH2) | SOAUTH2 client/secret or token endpoint wrong | Re-check the SOAUTH2 client + `{clientId,clientSecret}` secret — S2/A1 |
 | **SAP 401** issuer/`aud` mismatch (M2M via external IdP) | SOIDC issuer/audience wrong for the IdP-minted token | Fix SOIDC trust — S5 |
 | **M2M-via-external-IdP token maps to no user** | client_id→technical-user binding missing (the S5 gap) | **UNVERIFIED** — use M2M via SAP SOAUTH2 client-credentials (SAP-as-authz-server) or confirm SOIDC client-id binding on your system |
-| **M2M flow vs EntraId/OBO external inbound** | Inbound-authorizer mismatch (A3) | Point external stack at Cognito/M2M inbound, or use the OBO path |
+| **M2M flow vs EntraId external inbound** | Inbound-authorizer mismatch (A3) | Point external stack at a Cognito inbound |
 | **Target `READY` but zero tools** | Wrong external inbound scope, or `listing_mode: DYNAMIC` | Use the external pool's own resource-server scope; prefer `DEFAULT` — see the SAP MCP integration reference |
 
 ## Open items (carried, not blocking the M2M-via-SOAUTH2 GA-ness)

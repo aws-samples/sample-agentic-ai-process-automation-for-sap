@@ -47,7 +47,10 @@ permit(
   action in [
     AgentCore::Action::"knowledge-base-target___search_sap_sops",
     AgentCore::Action::"knowledge-base-target___search_sap_api_docs",
-    AgentCore::Action::"case-management-target___get_case_state"
+    AgentCore::Action::"knowledge-base-target___load_sop",
+    AgentCore::Action::"case-management-target___get_case_state",
+    AgentCore::Action::"agent-knowledge-target___get_precedent",
+    AgentCore::Action::"agent-knowledge-target___check_vendor_risk"
   ],
   resource
 );

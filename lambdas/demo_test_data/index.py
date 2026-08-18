@@ -14,6 +14,7 @@ Routes:
 import json
 import logging
 import os
+import re
 import time
 from datetime import datetime, timedelta, timezone
 
@@ -57,7 +58,13 @@ def _get_sap_config() -> tuple[str, tuple[str, str]]:
     creds = json.loads(
         secretsmanager.get_secret_value(SecretId=secret_arn)["SecretString"]
     )
-    return creds["base_url"], (creds["username"], creds["password"])
+    # Callers below append the OData service root, so strip it if the secret
+    # carries it — otherwise every URL doubles the path. Mirrors the sap_auth
+    # layer's normalize_base_url (not imported: this Lambda has no layer).
+    base_url = re.sub(
+        r"/sap/opu/odata/sap/?$", "", creds["base_url"].strip(), flags=re.IGNORECASE
+    ).rstrip("/")
+    return base_url, (creds["username"], creds["password"])
 
 
 def _get_csrf_token(base_url: str, auth: tuple) -> tuple:

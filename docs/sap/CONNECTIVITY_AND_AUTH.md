@@ -54,41 +54,31 @@ sap:
 1. CDK creates a Secrets Manager secret: `{stack_name_base}/sap-credentials` with keys `base_url`, `username`, `password`
 2. CDK stores the secret ARN in SSM: `/{stack_name_base}/secrets/sap-credentials-arn`
 3. The poller reads the ARN from SSM, then fetches the secret
-4. `./scripts/sync-sap-secret.sh` updates the secret values
+4. `python3 launch.py sync-sap` updates the secret values
 
 These same credentials are what you configure on the external AWS for SAP MCP server (BASIC auth) for the agent's interactive SAP access.
 
 ## Frontend Auth Providers
 
-`sap.auth_provider` selects the **frontend login** IdP (how a human signs in to the web app). It is independent of SAP identity.
+The **frontend login** IdP (how a human signs in to the web app) is selected by `auth_profile`'s `frontend` axis, not by anything under `sap:`. See [AUTH_PROFILE_SELECTION.md](./AUTH_PROFILE_SELECTION.md) for the full profile catalog and [`auth-profiles.yaml`](../../auth-profiles.yaml) for the axis definitions.
 
-| Provider | Mechanism | Notes |
-|----------|-----------|-------|
+| Frontend axis | Mechanism | Notes |
+|----------------|-----------|-------|
 | `cognito` | AWS Cognito User Pool | Default — already provisioned by the Cognito stack |
-| `okta` | Okta OIDC | Requires `issuer_url` + `client_id` |
-| `custom-oidc` | Any OIDC provider | Requires `issuer_url` + `client_id` |
+| `direct-okta` | Okta OIDC | Requires `frontend_overrides` (`discovery_url` + `client_id`) |
+| `direct-entra` | Entra ID OIDC | Requires `frontend_overrides` (`discovery_url` + `client_id`) |
 
-### Configuration examples
+### Configuration example
 
 ```yaml
-# cognito (default)
-sap:
-  auth_provider: cognito
+# cognito (default) — no auth_profile override needed
 
-# okta
-sap:
-  auth_provider: okta
-  auth:
-    issuer_url: https://dev-12345.okta.com/oauth2/default
-    client_id: 0oa1234567890abcdef  # gitleaks:allow (example placeholder)
-
-# custom OIDC
-sap:
-  auth_provider: custom-oidc
-  auth:
-    issuer_url: https://auth.example.com
-    client_id: my-client-id
-    scopes: openid profile email
+# direct-entra / direct-okta
+auth_profile: entra-obo   # or okta-basic
+frontend_overrides:
+  discovery_url: https://login.microsoftonline.com/<tenant>/v2.0/.well-known/openid-configuration
+  client_id: <spa-app-client-id>
+  scope: email openid profile offline_access   # optional
 ```
 
 ## SAP Machine Identity (service-account)
@@ -132,7 +122,7 @@ headers = context.client_context.custom.get("bedrockAgentCorePropagatedHeaders",
 The Gateway's `allowedRequestHeaders` configuration controls which headers are propagated:
 - `x-audit-correlation-id` — distributed trace ID
 - `x-audit-initiator` — who initiated the action
-- `x-audit-trigger` — what triggered it (manual, poller, webhook)
+- `x-audit-trigger` — what triggered it (manual, poller, webhook-*, batch)
 
 ### Header Namespaces
 

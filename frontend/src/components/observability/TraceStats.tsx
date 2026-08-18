@@ -1,55 +1,15 @@
 // Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useEffect, useState, useMemo } from "react"
+import { useMemo } from "react"
 import { Card } from "@/components/ui/card"
+import { StatMetric } from "@/components/ui/page-chrome"
 import type { TraceRecord } from "@/services/observabilityService"
 import { computeTraceStats } from "./utils/traceUtils"
 
-// Mirrors the AnimatedNumber pattern used in ObservabilityPage, for visual consistency.
-function AnimatedNumber({
-  value,
-  decimals = 0,
-  prefix = "",
-  suffix = "",
-}: {
-  value: number
-  decimals?: number
-  prefix?: string
-  suffix?: string
-}) {
-  const [display, setDisplay] = useState(0)
-
-  useEffect(() => {
-    const duration = 800
-    const start = display
-    const diff = value - start
-    const startTime = performance.now()
-    let cancelled = false
-
-    function tick(now: number) {
-      if (cancelled) return
-      const elapsed = now - startTime
-      const progress = Math.min(elapsed / duration, 1)
-      const eased = 1 - Math.pow(1 - progress, 3) // ease-out cubic
-      setDisplay(start + diff * eased)
-      if (progress < 1) requestAnimationFrame(tick)
-    }
-    requestAnimationFrame(tick)
-
-    return () => {
-      cancelled = true
-    }
-  }, [value])
-
-  return (
-    <span className="tabular-nums">
-      {prefix}
-      {display.toFixed(decimals)}
-      {suffix}
-    </span>
-  )
-}
+// These figures land at their value rather than counting up to it: a ramp on a number
+// someone is reconciling against SAP shows a wrong figure for most of its duration, and
+// every ramp here ran past the 250 ms motion ceiling.
 
 export interface TraceStatsProps {
   traces: TraceRecord[]
@@ -63,28 +23,20 @@ export default function TraceStats({ traces }: TraceStatsProps) {
   return (
     <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
       <Card className="p-4">
-        <p className="text-xs text-gray-500 uppercase tracking-wider">Total Traces</p>
-        <p className="text-3xl font-bold mt-1">
-          <AnimatedNumber value={stats.totalTraces} />
-        </p>
+        <StatMetric label="Total Traces" value={stats.totalTraces} />
       </Card>
 
       <Card className="p-4">
-        <p className="text-xs text-gray-500 uppercase tracking-wider">Success Rate</p>
-        <p className="text-3xl font-bold mt-1">
-          <AnimatedNumber value={stats.successRate * 100} decimals={1} suffix="%" />
-        </p>
+        <StatMetric label="Success Rate" value={`${(stats.successRate * 100).toFixed(1)}%`} />
       </Card>
 
       <Card className="p-4">
-        <p className="text-xs text-gray-500 uppercase tracking-wider">Avg Segments</p>
-        <p className="text-3xl font-bold mt-1">
-          <AnimatedNumber value={stats.avgSegments} decimals={1} />
-        </p>
+        <StatMetric label="Avg Segments" value={stats.avgSegments.toFixed(1)} />
       </Card>
 
       <Card className="p-4">
-        <p className="text-xs text-gray-500 uppercase tracking-wider">Top Tool</p>
+        <p className="text-xs text-muted-foreground uppercase tracking-wider">Top Tool</p>
+        {/* A tool name, not a number — mono, because it is matched against config. */}
         <p className="text-lg font-semibold mt-2 font-mono truncate" title={topToolName}>
           {topToolName}
         </p>

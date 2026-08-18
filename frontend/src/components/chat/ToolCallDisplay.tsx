@@ -1,19 +1,20 @@
 // Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
-"use client"
-
 import { useState } from "react"
 import {
   Wrench,
   Loader2,
   CheckCircle2,
+  CircleHelp,
   ChevronRight,
   ChevronDown,
   ShieldAlert,
   ExternalLink,
+  XCircle,
 } from "lucide-react"
-import type { ToolRenderProps } from "@/hooks/useToolRenderer"
+import type { ToolRenderProps } from "@/components/chat/types"
+import { TONE_BANNER, TONE_TEXT } from "@/lib/statusTone"
 
 /**
  * An "authentication_required" tool result is a NORMAL tool result (isError:false);
@@ -68,25 +69,66 @@ export function ToolCallDisplay({ name, args, status, result }: ToolRenderProps)
         )}
         <Wrench size={12} className="text-muted-foreground" />
         <span className="text-foreground">{name}</span>
-        {status === "streaming" && (
-          <Loader2 size={12} className="animate-spin text-blue-500 ml-auto" />
-        )}
-        {status === "executing" && (
-          <Loader2 size={12} className="animate-spin text-amber-500 ml-auto" />
+        {/* Live tool work is agent activity, so it uses the reserved agent colour,
+            not a status tone — the spinner means "the agent is doing something". */}
+        {(status === "streaming" || status === "executing") && (
+          <Loader2 size={12} className="animate-spin text-agent ml-auto" />
         )}
         {status === "complete" && !authRequired && (
-          <CheckCircle2 size={12} className="text-green-500 ml-auto" />
+          <CheckCircle2
+            size={12}
+            className={`ml-auto ${TONE_TEXT.success}`}
+            aria-label="Tool call succeeded"
+          />
         )}
-        {authRequired && <ShieldAlert size={12} className="text-amber-500 ml-auto" />}
+        {status === "incomplete" && (
+          <CircleHelp
+            size={12}
+            className={`ml-auto ${TONE_TEXT.attention}`}
+            aria-label="Tool outcome not confirmed"
+          />
+        )}
+        {status === "error" && (
+          <XCircle
+            size={12}
+            className={`ml-auto ${TONE_TEXT.danger}`}
+            aria-label="Tool call failed"
+          />
+        )}
+        {authRequired && <ShieldAlert size={12} className={`ml-auto ${TONE_TEXT.attention}`} />}
       </button>
 
+      {status === "incomplete" && (
+        <div
+          className={`ml-6 mt-1 rounded-md border-l-4 p-2 text-xs ${TONE_BANNER.attention}`}
+          role="status"
+        >
+          Tool outcome not confirmed. Verify the target system and case state before retrying; the
+          action may already have completed.
+        </div>
+      )}
+
+      {/* Polite, not assertive: replayed history mounts these by the handful, and a
+          settled past failure has no business interrupting a screen reader mid-sentence. */}
+      {status === "error" && (
+        <div
+          className={`ml-6 mt-1 rounded-md border-l-4 p-2 text-xs ${TONE_BANNER.danger}`}
+          role="status"
+        >
+          This tool call failed. The case state may not reflect the intended change.
+        </div>
+      )}
+
       {authRequired && (
-        <div className="ml-6 mt-1 rounded-md border border-amber-200 bg-amber-50 p-3 space-y-2">
-          <div className="flex items-center gap-1.5 text-amber-800 font-medium">
+        <div
+          className={`ml-6 mt-1 space-y-2 rounded-md border-l-4 p-3 ${TONE_BANNER.attention}`}
+          role="status"
+        >
+          <div className="flex items-center gap-1.5 font-medium">
             <ShieldAlert size={14} />
             <span>Sign in to SAP required</span>
           </div>
-          <p className="text-xs text-amber-700">
+          <p className="text-xs">
             {authRequired.message ||
               "Authentication required. Please authenticate using the link below. Retry once authenticated."}
           </p>
@@ -101,12 +143,12 @@ export function ToolCallDisplay({ name, args, status, result }: ToolRenderProps)
                 "width=480,height=700,menubar=no,toolbar=no"
               )
             }
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-amber-600 text-white text-xs font-medium hover:bg-amber-700 transition-colors"
+            className="inline-flex items-center gap-1.5 rounded-md bg-orange-700 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-orange-800"
           >
             <ExternalLink size={12} />
             Sign in to SAP
           </button>
-          <p className="text-xs text-amber-600">
+          <p className="text-xs opacity-80">
             After signing in, this window continues automatically.
           </p>
         </div>

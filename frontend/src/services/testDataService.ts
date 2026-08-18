@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { getConfig } from "@/lib/config"
+import { apiFetch } from "@/lib/apiFetch"
 
 export interface CreateApTestCasePayload {
   po_amount: number
@@ -40,14 +41,10 @@ export async function createApTestCase(
 ): Promise<CreateApTestCaseResult> {
   const { demoApiUrl } = await getConfig()
   if (!demoApiUrl) throw new Error("Demo API not configured — enable demo stack and redeploy")
-  const res = await fetch(`${demoApiUrl}/demo/test-data/ap-cases`, {
-    method: "POST",
-    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
-  })
-  if (!res.ok) {
-    const detail = await res.json().catch(() => ({ error: `HTTP ${res.status}` }))
-    throw new Error(detail.error || `Failed to create AP test case: ${res.status}`)
-  }
-  return res.json()
+  return apiFetch(
+    `${demoApiUrl}/demo/test-data/ap-cases`,
+    { token, method: "POST", body: payload },
+    "Failed to create AP test case",
+    async res => (await res.json().catch(() => ({}))).error
+  )
 }

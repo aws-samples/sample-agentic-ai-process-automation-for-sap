@@ -3,6 +3,7 @@
 
 import type { Ticket, TicketStatus } from "@/types/tickets"
 import { getConfig } from "@/lib/config"
+import { apiFetch } from "@/lib/apiFetch"
 
 export async function fetchTickets(
   filter: { status?: TicketStatus | "all"; assigned_to?: string },
@@ -13,20 +14,12 @@ export async function fetchTickets(
   if (filter.status && filter.status !== "all") params.set("status", filter.status)
   if (filter.assigned_to) params.set("assigned_to", filter.assigned_to)
 
-  const res = await fetch(`${apiUrl}/tickets?${params}`, {
-    headers: { Authorization: `Bearer ${token}` },
-  })
-  if (!res.ok) throw new Error(`Failed to fetch tickets: ${res.status}`)
-  return res.json()
+  return apiFetch(`${apiUrl}/tickets?${params}`, { token }, "Failed to fetch tickets")
 }
 
 export async function fetchTicket(ticketId: string, token: string): Promise<Ticket> {
   const { apiUrl } = await getConfig()
-  const res = await fetch(`${apiUrl}/tickets/${ticketId}`, {
-    headers: { Authorization: `Bearer ${token}` },
-  })
-  if (!res.ok) throw new Error(`Failed to fetch ticket: ${res.status}`)
-  return res.json()
+  return apiFetch(`${apiUrl}/tickets/${ticketId}`, { token }, "Failed to fetch ticket")
 }
 
 export async function createTicket(
@@ -40,13 +33,11 @@ export async function createTicket(
   token: string
 ): Promise<Ticket> {
   const { apiUrl } = await getConfig()
-  const res = await fetch(`${apiUrl}/tickets`, {
-    method: "POST",
-    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-    body: JSON.stringify(data),
-  })
-  if (!res.ok) throw new Error(`Failed to create ticket: ${res.status}`)
-  return res.json()
+  return apiFetch(
+    `${apiUrl}/tickets`,
+    { token, method: "POST", body: data },
+    "Failed to create ticket"
+  )
 }
 
 export async function updateTicket(
@@ -61,13 +52,11 @@ export async function updateTicket(
   token: string
 ): Promise<Ticket> {
   const { apiUrl } = await getConfig()
-  const res = await fetch(`${apiUrl}/tickets/${ticketId}`, {
-    method: "PUT",
-    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-    body: JSON.stringify(data),
-  })
-  if (!res.ok) throw new Error(`Failed to update ticket: ${res.status}`)
-  return res.json()
+  return apiFetch(
+    `${apiUrl}/tickets/${ticketId}`,
+    { token, method: "PUT", body: data },
+    "Failed to update ticket"
+  )
 }
 
 export async function submitTicketAction(
@@ -78,16 +67,20 @@ export async function submitTicketAction(
   responseText?: string
 ): Promise<{ ticket: Ticket; enqueued: boolean; case_id: string }> {
   const { apiUrl } = await getConfig()
-  const res = await fetch(`${apiUrl}/tickets/${ticketId}/action`, {
-    method: "POST",
-    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-    body: JSON.stringify({
-      action,
-      resolution,
-      comment: action === "replied" ? `Reply: ${resolution}` : `Ticket ${action} by user`,
-      ...(responseText ? { response_text: responseText } : {}),
-    }),
-  })
-  if (!res.ok) throw new Error(`Failed to submit ticket action: ${res.status}`)
-  return res.json()
+  return apiFetch(
+    `${apiUrl}/tickets/${ticketId}/action`,
+    {
+      token,
+      method: "POST",
+      body: {
+        action,
+        resolution,
+        // The reviewer's own words, on every action. `resolution` is what reaches the
+        // resumed agent, so a canned comment here would only diverge from it.
+        comment: resolution,
+        ...(responseText ? { response_text: responseText } : {}),
+      },
+    },
+    "Failed to submit ticket action"
+  )
 }

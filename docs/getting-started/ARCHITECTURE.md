@@ -28,8 +28,8 @@ flowchart TD
     subgraph Frontend["Frontend (React + Amplify Hosting)"]
         UI[Cases Dashboard\nFilter · Multi-select · Batch process]
         Chat[Chat / Workspace\nSSE streaming]
-        Toggle[Autonomy Toggle\ntrigger-mode]
-        Analytics[Analytics Dashboard\nSkeleton]
+        Toggle[Settings\ntrigger-mode · autonomy funnel]
+        Analytics[Analytics Dashboard\nPeriod briefing · Charts · Health]
         Tickets[Tickets Dashboard\nCreate · Update · Track]
     end
 
@@ -43,7 +43,7 @@ flowchart TD
         Poller[odata_poller Lambda\nSAP OData polling\nCreates cases in DDB]
         SES[SES Receipt Rule]
         S3Email[S3 Email Bucket]
-        Webhook[webhook_processor Lambda\nUnified inbound\nSES · Slack · Jira · ServiceNow]
+        Webhook[webhook_processor Lambda\nUnified inbound\nSES · Jira · ServiceNow]
         Queue[SQS FIFO Queue\nDeduplication]
         Invoker[agent_invoker Lambda\nSQS consumer]
     end
@@ -58,7 +58,7 @@ flowchart TD
     subgraph Gateway["AgentCore Gateway (MCP over OAuth2 M2M)"]
         GW[Gateway\nCedar policy evaluation]
         CaseTool[case_management Lambda\nDynamoDB read/write]
-        NotifTool[notification Lambda\nSES · Slack · Jira · ServiceNow]
+        NotifTool[notification Lambda\nSES · Jira · ServiceNow]
         KBTool[knowledge_base Lambda\nBedrock KB search]
         TicketTool[demo_ticket_management Lambda\nCreate · Update · Get · List\ndemo.ticketing.enabled only]
         SapMcpTarget[SAP OData MCP target\nProxies external SAP MCP server]
@@ -149,7 +149,7 @@ React SPA hosted on Amplify. Five main views:
 - **Workspace / Chat** — context-aware chat with SSE streaming; selected cases are injected as agent context
 - **Cases Dashboard** — lists all cases from DynamoDB, supports filtering, multi-select, and batch processing
 - **Case Detail** — per-case view with agent traces, status, and metadata
-- **Analytics Dashboard** — skeleton for future operational metrics and trend analysis
+- **Analytics Dashboard** — states the selected window's outcome in prose, then charts for cases, latency, tokens, cost, and infrastructure health
 - **Tickets Dashboard** — create, update, and track tickets for escalations and approval workflows
 
 ### Auth
@@ -158,7 +158,7 @@ React SPA hosted on Amplify. Five main views:
 
 ### Event-Driven Ingestion
 - **odata_poller** — polls SAP OData APIs on a configurable EventBridge schedule, creates/updates cases in DynamoDB, enqueues to SQS when `trigger-mode: auto`
-- **webhook_processor** — unified inbound handler for SES email (via S3), Slack, Jira, and ServiceNow webhooks; normalizes to standard payload and enqueues to SQS
+- **webhook_processor** — unified inbound handler for SES email (via S3), Jira, and ServiceNow webhooks; normalizes to standard payload and enqueues to SQS
 - **agent_invoker** — SQS FIFO consumer that invokes the AgentCore Runtime per case
 
 ### AgentCore Runtime
@@ -173,7 +173,7 @@ MCP-over-OAuth2 proxy that routes agent tool calls. Cedar policies are evaluated
 | Tool | Backing | Purpose |
 |------|---------|---------|
 | `case_management` | Lambda | DynamoDB case read/write |
-| `notification` | Lambda | Multi-channel outbound (SES/Slack/Jira/ServiceNow) |
+| `notification` | Lambda | Multi-channel outbound (SES/Jira/ServiceNow) |
 | `knowledge_base` | Lambda | Bedrock KB semantic search over SAP API docs |
 | `demo_ticket_management` | Lambda | Ticket create/update/get/list — only when `demo.ticketing.enabled` |
 | SAP OData | MCP target | Read/write/discovery via external AWS for SAP MCP server (see [ADR-012](../design-decisions/012-sap-mcp-server-integration.md)) |
@@ -182,7 +182,7 @@ MCP-over-OAuth2 proxy that routes agent tool calls. Cedar policies are evaluated
 All SAP OData (read, write, discovery) flows through the external [AWS for SAP MCP server](../design-decisions/012-sap-mcp-server-integration.md), reached as a Gateway MCP target. Interactive per-user SAP access uses that server's USER_FEDERATION (OBO) flow. The `odata_poller` Lambda is the only component that calls SAP directly, using service-account Basic Auth from Secrets Manager. See [SAP MCP Integration](../sap/SAP_MCP_INTEGRATION.md) and [Connectivity & Auth](../sap/CONNECTIVITY_AND_AUTH.md).
 
 ### Data Layer
-- **DynamoDB Cases Table** — composite key (`document_number` + `item_id`), `status-index` GSI, TTL
+- **DynamoDB Cases Table** — partition key `case_id` (`{document_number}-{item_id}`, built by the `case_key` codec), `status-index` and `domain-status-index` GSIs, TTL
 - **DynamoDB Tickets Table** — ticket management for escalations and approval workflows
 - **S3 SOPs Bucket** — versioned, Glacier lifecycle, admin-only writes; SOPs injected into agent prompt at runtime
 - **S3 API Docs** — SAP API documentation synced to Bedrock Knowledge Base
@@ -190,6 +190,6 @@ All SAP OData (read, write, discovery) flows through the external [AWS for SAP M
 
 ### Supporting Infrastructure
 - **SSM Parameter Store** — autonomy controls, resource ARNs, notification channel config
-- **Secrets Manager** — SAP credentials, notification channel secrets (Slack token, Jira API key, etc.)
+- **Secrets Manager** — SAP credentials, notification channel secrets (Jira API key, ServiceNow token, etc.)
 - **CloudWatch** — custom agent metrics (`AgentInvocations`, `AgentErrors`, `AgentLatencyMs`, `AgentTurns`), dashboard, alarms
 - **Cedar Policy Engine** — evaluates authorization policies before each Gateway tool invocation

@@ -46,9 +46,9 @@ def create_custom_evaluator(region: str) -> str:
         ),
         evaluationLevel="SESSION",
         inferenceConfig={
-            "modelId": "us.anthropic.claude-sonnet-4-5-20250929-v1:0",
+            # No temperature: Sonnet 5 rejects sampling params with a 400.
+            "modelId": "us.anthropic.claude-sonnet-5",
             "maxTokens": 1024,
-            "temperature": 0.0,
         },
         instructions="""You are an expert SAP financial auditor evaluating an AI agent's actions.
 

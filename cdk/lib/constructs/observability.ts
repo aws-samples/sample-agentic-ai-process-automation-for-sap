@@ -14,6 +14,17 @@ export interface ObservabilityProps {
   stackNameBase: string
   metricsNamespace: string
   alarmEmail?: string
+  /**
+   * Create a CloudTrail trail to feed the autonomy-change alarm (M7).
+   *
+   * Off by default, matching `security.waf_enabled` and
+   * `security.guardrail_enabled`. CloudTrail allows only **5 trails per
+   * Region** and that is a hard limit, not a raisable quota — so an
+   * unconditional trail here caps how many copies of this sample can coexist
+   * in one Region, and fails the deploy outright once the account is at the
+   * limit. Enable it in environments that need the alarm.
+   */
+  auditTrailEnabled?: boolean
 }
 
 /**
@@ -99,61 +110,66 @@ export class ObservabilityConstruct extends Construct {
     })
 
     // --- CloudTrail → autonomy change alarm (M7) ---
+    // Opt-in: see ObservabilityProps.auditTrailEnabled for why.
 
-    const trailLogGroup = new logs.LogGroup(this, "TrailLogGroup", {
-      logGroupName: `/${props.stackNameBase}/cloudtrail`,
-      retention: logs.RetentionDays.THREE_MONTHS,
-      removalPolicy: cdk.RemovalPolicy.DESTROY,
-    })
+    let autonomyChangeAlarm: cloudwatch.Alarm | undefined
+    if (props.auditTrailEnabled) {
+      const trailLogGroup = new logs.LogGroup(this, "TrailLogGroup", {
+        logGroupName: `/${props.stackNameBase}/cloudtrail`,
+        retention: logs.RetentionDays.THREE_MONTHS,
+        removalPolicy: cdk.RemovalPolicy.DESTROY,
+      })
 
-    const trailBucket = new s3.Bucket(this, "TrailBucket", {
-      bucketName: `${props.stackNameBase}-cloudtrail-${cdk.Aws.ACCOUNT_ID}`,
-      enforceSSL: true,
-      autoDeleteObjects: true,
-      removalPolicy: cdk.RemovalPolicy.DESTROY,
-      lifecycleRules: [{ expiration: cdk.Duration.days(90) }],
-    })
+      const trailBucket = new s3.Bucket(this, "TrailBucket", {
+        bucketName: `${props.stackNameBase}-cloudtrail-${cdk.Aws.ACCOUNT_ID}`,
+        enforceSSL: true,
+        autoDeleteObjects: true,
+        removalPolicy: cdk.RemovalPolicy.DESTROY,
+        lifecycleRules: [{ expiration: cdk.Duration.days(90) }],
+      })
 
-    new cloudtrail.Trail(this, "SsmTrail", {
-      trailName: `${props.stackNameBase}-ssm-trail`,
-      bucket: trailBucket,
-      cloudWatchLogGroup: trailLogGroup,
-      sendToCloudWatchLogs: true,
-      managementEvents: cloudtrail.ReadWriteType.WRITE_ONLY,
-    })
+      new cloudtrail.Trail(this, "SsmTrail", {
+        trailName: `${props.stackNameBase}-ssm-trail`,
+        bucket: trailBucket,
+        cloudWatchLogGroup: trailLogGroup,
+        sendToCloudWatchLogs: true,
+        managementEvents: cloudtrail.ReadWriteType.WRITE_ONLY,
+      })
 
-    // Metric filter: count PutParameter calls targeting autonomy params
-    const autonomyPrefix = `/${props.stackNameBase}/autonomy/`
-    const autonomyMetricFilter = new logs.MetricFilter(this, "AutonomyChangeFilter", {
-      logGroup: trailLogGroup,
-      filterPattern: logs.FilterPattern.all(
-        logs.FilterPattern.stringValue("$.eventName", "=", "PutParameter"),
-        logs.FilterPattern.stringValue("$.requestParameters.name", "=", `${autonomyPrefix}*`),
-      ),
-      metricNamespace: ns,
-      metricName: "AutonomyParameterChange",
-      metricValue: "1",
-      defaultValue: 0,
-    })
+      // Metric filter: count PutParameter calls targeting autonomy params
+      const autonomyPrefix = `/${props.stackNameBase}/autonomy/`
+      const autonomyMetricFilter = new logs.MetricFilter(this, "AutonomyChangeFilter", {
+        logGroup: trailLogGroup,
+        filterPattern: logs.FilterPattern.all(
+          logs.FilterPattern.stringValue("$.eventName", "=", "PutParameter"),
+          logs.FilterPattern.stringValue("$.requestParameters.name", "=", `${autonomyPrefix}*`),
+        ),
+        metricNamespace: ns,
+        metricName: "AutonomyParameterChange",
+        metricValue: "1",
+        defaultValue: 0,
+      })
 
-    const autonomyChangeAlarm = new cloudwatch.Alarm(this, "AutonomyChangeAlarm", {
-      alarmName: `${props.stackNameBase}-autonomy-change`,
-      alarmDescription: "Autonomy control parameter was modified — verify the change was authorized",
-      metric: autonomyMetricFilter.metric({
-        statistic: "Sum",
-        period: cdk.Duration.minutes(5),
-      }),
-      threshold: 0,
-      comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
-      evaluationPeriods: 1,
-      treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
-    })
+      autonomyChangeAlarm = new cloudwatch.Alarm(this, "AutonomyChangeAlarm", {
+        alarmName: `${props.stackNameBase}-autonomy-change`,
+        alarmDescription:
+          "Autonomy control parameter was modified — verify the change was authorized",
+        metric: autonomyMetricFilter.metric({
+          statistic: "Sum",
+          period: cdk.Duration.minutes(5),
+        }),
+        threshold: 0,
+        comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
+        evaluationPeriods: 1,
+        treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+      })
+    }
 
     if (alarmTopic) {
       dlqAlarm.addAlarmAction(new actions.SnsAction(alarmTopic))
       failureAlarm.addAlarmAction(new actions.SnsAction(alarmTopic))
       costAlarm.addAlarmAction(new actions.SnsAction(alarmTopic))
-      autonomyChangeAlarm.addAlarmAction(new actions.SnsAction(alarmTopic))
+      autonomyChangeAlarm?.addAlarmAction(new actions.SnsAction(alarmTopic))
     }
 
     // --- Dashboard ---
@@ -239,7 +255,10 @@ export class ObservabilityConstruct extends Construct {
       }),
       new cloudwatch.AlarmStatusWidget({
         title: "Alarm Status",
-        alarms: [dlqAlarm, failureAlarm, costAlarm, autonomyChangeAlarm],
+        // autonomyChangeAlarm only exists when the audit trail is enabled.
+        alarms: [dlqAlarm, failureAlarm, costAlarm, autonomyChangeAlarm].filter(
+          (alarm): alarm is cloudwatch.Alarm => alarm !== undefined,
+        ),
         width: 8,
         height: 6,
       }),

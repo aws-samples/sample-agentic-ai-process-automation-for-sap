@@ -17,12 +17,16 @@ from datetime import datetime, timezone
 
 import boto3
 
+# Canonical case identity codec — ships in the shared_types layer.
+from case_key import CaseKeyError, to_case_key
+
 # WorkItem model + validator ship in the shared_types Lambda layer. Best-effort
 # import: absent in local dev/test (validation no-ops), present in the Lambda.
 try:
-    from generated_cases import WorkItem
+    from generated_cases import CaseStatus, WorkItem
     from validate import validate_or_log
 except ImportError:
+    CaseStatus = None
     WorkItem = None
 
     def validate_or_log(model, data, *, context=""):
@@ -50,35 +54,32 @@ def _get_table():
     return _table
 
 
-def _validate_key(val: str) -> bool:
-    """Validate a case key field (document_number or item_id). Accepts any non-empty
-    alphanumeric string up to 40 chars (covers invoice numbers, PO numbers,
-    fiscal years, item sequences)."""
-    return bool(val and len(val) <= 40)
+def _resolve_case_key(event: dict) -> dict[str, str]:
+    """Return the DynamoDB key for the case the agent named.
+
+    The model is given a ``case_id`` in its prompt, so that is the contract.
+
+    Raises:
+        CaseKeyError: If ``case_id`` is not a well-formed identity.
+    """
+    return to_case_key(event.get("case_id", ""))
 
 
-def _get_case(document_number: str, item_id: str):
-    if not _validate_key(document_number):
-        return {
-            "error": "Invalid document_number (case key). Must be non-empty, max 40 chars."
-        }
-    if not _validate_key(item_id):
-        return {
-            "error": "Invalid item_id (case sort key). Must be non-empty, max 40 chars."
-        }
+def _get_case(event: dict):
+    try:
+        key = _resolve_case_key(event)
+    except CaseKeyError as e:
+        return {"error": f"Invalid case identity: {e}"}
 
     table = _get_table()
-    resp = table.get_item(
-        Key={"document_number": document_number, "item_id": item_id},
-        ConsistentRead=True,
-    )
+    resp = table.get_item(Key=key, ConsistentRead=True)
     item = resp.get("Item")
     if not item:
         return {
             "content": [
                 {
                     "type": "text",
-                    "text": f"No case found for document {document_number} item {item_id}",
+                    "text": f"No case found for {key['case_id']}",
                 }
             ]
         }
@@ -90,36 +91,79 @@ def _get_case(document_number: str, item_id: str):
     }
 
 
-def _update_case(document_number: str, item_id: str, updates_json: str, action: str):
-    if not _validate_key(document_number):
-        return {
-            "error": "Invalid document_number (case key). Must be non-empty, max 40 chars."
-        }
-    if not _validate_key(item_id):
-        return {
-            "error": "Invalid item_id (case sort key). Must be non-empty, max 40 chars."
-        }
+def _update_case(event: dict):
+    try:
+        key = _resolve_case_key(event)
+    except CaseKeyError as e:
+        return {"error": f"Invalid case identity: {e}"}
+
+    updates_json = event.get("updates", "{}")
+    action = event.get("action", "update")
 
     try:
         updates = json.loads(updates_json)
     except json.JSONDecodeError:
         return {"error": "Invalid JSON in updates field"}
 
+    # Trust boundary: `status` is model-authored free text. An out-of-enum value
+    # is not merely invalid — the UI's caseStatusMeta falls back to "Detected",
+    # so a failed case would render as brand new. Reject instead of warning
+    # (validate_or_log is a log-and-continue net) and name the legal values so
+    # the agent can self-correct on the next turn.
+    if CaseStatus is not None and "status" in updates:
+        allowed = [s.value for s in CaseStatus]
+        if updates["status"] not in allowed:
+            return {
+                "error": (
+                    f"Invalid status {updates['status']!r}. "
+                    f"Must be one of: {', '.join(sorted(allowed))}"
+                )
+            }
+
     table = _get_table()
     ts = datetime.now(timezone.utc).isoformat()
 
     update_parts = []
+    remove_parts = []
     expr_values = {
         ":ts": ts,
     }
     expr_names = {}
 
-    for key, value in updates.items():
-        update_parts.append(f"#{key} = :{key}")
-        expr_names[f"#{key}"] = key
-        expr_values[f":{key}"] = value
+    # Server-owned fields are dropped from model-authored `updates` rather than
+    # merged. Two reasons, and the first is a hard failure: this function already
+    # writes each of these itself, and DynamoDB rejects an UpdateExpression whose
+    # paths overlap ("Two document paths overlap") — so a model passing any of
+    # them used to fail the whole call, losing the status write with it. The
+    # second is trust: these three are the audit trail and the basis of the
+    # handover's age claim, so a fabricated value is worse than no value.
+    for reserved in ("updated_at", "action_log", "inquiry_sent_at"):
+        updates.pop(reserved, None)
+
+    for key_name, value in updates.items():
+        update_parts.append(f"#{key_name} = :{key_name}")
+        expr_names[f"#{key_name}"] = key_name
+        expr_values[f":{key_name}"] = value
 
     update_parts.append("updated_at = :ts")
+
+    # `inquiry_sent_at` is stamped here rather than asked of the model. Reaching
+    # awaiting_human_input *is* the moment a human was asked: the platform prompt
+    # sends the ticket or notification, then sets this status, and both channels
+    # plus every SOP route through this one call. Asking eight SOP clauses to pass
+    # the field instead would make the handover's "waiting 6d" contingent on model
+    # cooperation, and a missed write reads as recent activity on a stale case.
+    #
+    # if_not_exists, because a re-invoked case that is still waiting writes the
+    # status again and the *first* inquiry is the one the age claim is about.
+    # Leaving the status clears it, so a case that comes back and escalates a
+    # second time is not aged from the first inquiry. An update that names no
+    # status touches neither — a field edit is not a change of who is waiting.
+    status = updates.get("status")
+    if status == "awaiting_human_input":
+        update_parts.append("inquiry_sent_at = if_not_exists(inquiry_sent_at, :ts)")
+    elif status is not None:
+        remove_parts.append("inquiry_sent_at")
 
     # Append to action_log for audit trail
     if action:
@@ -129,9 +173,13 @@ def _update_case(document_number: str, item_id: str, updates_json: str, action: 
         expr_values[":empty_list"] = []
         expr_values[":log_entry"] = [{"action": action, "timestamp": ts}]
 
+    expression = "SET " + ", ".join(update_parts)
+    if remove_parts:
+        expression += " REMOVE " + ", ".join(remove_parts)
+
     resp = table.update_item(
-        Key={"document_number": document_number, "item_id": item_id},
-        UpdateExpression="SET " + ", ".join(update_parts),
+        Key=key,
+        UpdateExpression=expression,
         ExpressionAttributeNames=expr_names,
         ExpressionAttributeValues=expr_values,
         ReturnValues="ALL_NEW",
@@ -174,14 +222,9 @@ def handler(event, context):
         tool_name = _resolve_tool_name(context)
 
         if tool_name == "get_case_state":
-            return _get_case(event.get("document_number", ""), event.get("item_id", ""))
+            return _get_case(event)
         elif tool_name == "update_case_state":
-            return _update_case(
-                event.get("document_number", ""),
-                event.get("item_id", ""),
-                event.get("updates", "{}"),
-                event.get("action", "update"),
-            )
+            return _update_case(event)
         else:
             return {"error": f"Unknown tool: {tool_name}"}
 

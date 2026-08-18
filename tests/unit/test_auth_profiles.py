@@ -7,6 +7,7 @@ from utils.auth_profiles import (
     ProfileValidationError,
     load_catalog,
     resolve_profile,
+    stub_blockers,
     stubbed_axes,
     validate_profile,
 )
@@ -86,16 +87,30 @@ def test_obo_requires_same_issuer():
         validate_profile(resolve_profile("mixed-obo", cat))
 
 
-def test_batch_requires_refresh():
+def test_batch_requires_refresh_only_for_user_identity_outbound():
+    # Refresh is required by acting as an ABSENT HUMAN, not by being unattended.
+    # A user-identity outbound with no refresh cannot outlive the authorizing
+    # session, so it is rejected...
     cat = load_catalog()
-    cat["profiles"]["batch-basic-bad"] = {
-        "frontend": "cognito",
-        "inbound": "cognito",
+    cat["profiles"]["batch-obo-bad"] = {
+        "frontend": "direct-entra",
+        "inbound": "entra",
         "mode": ["batch"],
-        "outbound": "basic",
+        "outbound": "obo",
     }
     with pytest.raises(ProfileValidationError, match="refresh"):
-        validate_profile(resolve_profile("batch-basic-bad", cat))
+        validate_profile(resolve_profile("batch-obo-bad", cat))
+
+    # ...but a service identity re-mints per run (client_credentials), so batch over
+    # m2m/basic needs no stored token and MUST be allowed — that is the built path.
+    cat["profiles"]["batch-m2m-ok"] = {
+        "frontend": "cognito",
+        "inbound": "cognito",
+        "mode": ["autonomous", "batch"],
+        "outbound": "m2m-sap",
+    }
+    validate_profile(resolve_profile("batch-m2m-ok", cat))  # no raise
+    validate_profile(resolve_profile("cognito-m2m-batch", cat))  # the shipped profile
 
 
 def test_mcp_path_allows_direct_obo():
@@ -220,15 +235,47 @@ def test_entra_obo_reports_no_stub_axes():
     assert stubs == []
 
 
-def test_entra_inbound_proven_okta_still_stub():
-    # entra + okta inbound share the generic inbound/jwt-authorizer module, but entra
-    # was proven end-to-end (entra-obo) so its stub was cleared while okta inbound
-    # (okta-userfed) stays stub until proven. Guards against re-coupling their status.
+def test_entra_and_okta_inbound_both_proven_independently():
+    # entra + okta inbound share the generic inbound/jwt-authorizer module. Each had
+    # its stub cleared only on its own evidence — entra via entra-obo, okta via a real
+    # Okta id_token accepted by the deployed authorizer. Sharing a module must never be
+    # the reason a value is live, so this asserts both are non-stub while
+    # test_okta_userfed_still_stub_via_outbound keeps the shared axis from over-clearing.
     cat = load_catalog()
-    entra = cat["axes"]["inbound"]["entra"].get("status", "live")
-    okta = cat["axes"]["inbound"]["okta"].get("status", "live")
-    assert entra == "live", f"entra inbound proven, should not be stub (got {entra})"
-    assert okta == "stub", f"okta inbound still unproven, should be stub (got {okta})"
+    for value in ("entra", "okta"):
+        status = cat["axes"]["inbound"][value].get("status", "live")
+        assert status == "live", (
+            f"{value} inbound proven, should not be stub (got {status})"
+        )
+
+
+def test_every_stub_axis_declares_a_real_blocker():
+    # blocked_by is what keeps `status: stub` from reading as "nobody built it" for
+    # axes that are built and only awaiting external config. An unannotated stub
+    # silently defaults to 'repo', so the vocabulary is pinned here.
+    cat = load_catalog()
+    for axis, values in cat["axes"].items():
+        for value, meta in values.items():
+            if meta.get("status", "live") == "stub":
+                assert meta.get("blocked_by") in ("repo", "operator", "upstream"), (
+                    f"axes.{axis}.{value} is stub with blocked_by="
+                    f"{meta.get('blocked_by')!r}; use repo | operator | upstream"
+                )
+
+
+def test_okta_basic_has_no_stub_axes():
+    # Both Okta axes cleared on their own evidence: a real login through the deployed
+    # SPA (PKCE public client) and the id_token it issued accepted by the deployed
+    # jwt-authorizer. `verified` stays unset — this profile's outbound is a Basic
+    # technical user, so no live-SAP run happened through it.
+    assert stubbed_axes(resolve_profile("okta-basic")) == []
+
+
+def test_okta_userfed_still_stub_via_outbound():
+    # okta-userfed shares both Okta axes with okta-basic, so clearing them must not
+    # promote it — its `user-federation` outbound is still upstream-blocked in
+    # AgentCore Identity's 3LO vault. Guards the shared-axis clear from over-reaching.
+    assert stub_blockers(resolve_profile("okta-userfed")) == {"outbound": "upstream"}
 
 
 def test_verified_profiles_have_no_stub_axes():
@@ -251,7 +298,17 @@ def test_verified_profiles_have_no_stub_axes():
 
 
 def test_stubbed_axes_flags_mode_when_any_member_stub():
-    stubs = stubbed_axes(resolve_profile("entra-userfed"))
-    # entra-userfed mode is [live, batch]; batch is stub -> mode flagged
-    assert "mode" in stubs
-    assert "outbound" in stubs  # user-federation is stub
+    # No shipped mode value is a stub any more (batch-runner is built), so drive the
+    # ANY-member logic off a synthetic stub rather than a real profile — otherwise
+    # this test silently stops exercising it.
+    cat = load_catalog()
+    cat["axes"]["mode"]["_t_stub_mode"] = {"maturity": "experimental", "status": "stub"}
+    cat["profiles"]["_t_mixed_mode"] = {
+        "frontend": "cognito",
+        "inbound": "cognito",
+        "mode": ["live", "_t_stub_mode"],
+        "outbound": "basic",
+    }
+    stubs = stubbed_axes(resolve_profile("_t_mixed_mode", cat), cat)
+    assert "mode" in stubs  # one stub member is enough
+    assert stubbed_axes(resolve_profile("cognito-m2m-batch", cat), cat) == []

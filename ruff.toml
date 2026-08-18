@@ -1,3 +1,9 @@
+# Ruff 0.16 added "*.md" to the default `include`, which makes `ruff format`
+# rewrite Python inside markdown code fences. Docs here are prose, and some are
+# point-in-time records, so the default would churn them on every run. Restated
+# without markdown rather than excluded, so a future *.md addition is deliberate.
+include = ["*.py", "*.pyi", "*.pyw", "*.ipynb", "**/pyproject.toml", "**/ruff.toml", "**/.ruff.toml"]
+
 # Let's exclude some whole directories until we are ready to format them individually
 extend-exclude = [
     "agentcore/agent",

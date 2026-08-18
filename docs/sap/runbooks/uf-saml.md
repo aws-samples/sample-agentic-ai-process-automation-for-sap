@@ -5,9 +5,11 @@ SPDX-License-Identifier: Apache-2.0
 
 # USER_FEDERATION (SAML) — Operator Runbook (User Federation, SAP-as-SAML-SP; Entra or Okta)
 
-> **PREVIEW — not yet deployable.** The User Federation outbound flow (with Entra, Okta, or
-> Cognito-fronted IAS as the IdP) is not built yet: the topology is modeled and validated, but its
-> deployment module does not exist. Reference design for the roadmap, not a ready-to-run procedure.
+> **PREVIEW — not yet deployable.** The User Federation outbound (with Entra, Okta, or
+> Cognito-fronted IAS as the IdP) is `status: stub, blocked_by: upstream` in `auth-profiles.yaml` —
+> the repository wiring exists (this flow shares the generic User Gateway target described below),
+> but end-to-end verification is blocked by an unresolved defect in AgentCore Identity's 3LO token
+> vault. Reference design for the roadmap, not a ready-to-run procedure.
 
 > **STATUS.** USER_FEDERATION (SAML) with Entra or Okta is a **documented USER_FEDERATION
 > variant, NOT aspirational** — the AWS-for-SAP MCP identity doc carries the row *"SAP as
@@ -343,9 +345,10 @@ breaks the flow.
 
 ## Open items (carried, not blocking — reference design)
 
-- **Not built / not run end-to-end.** This flow is in preview — the User Federation deployment
-  module is unbuilt; no live SAML SSO or real-user SAP audit proof exists here. The whole SAP-MCP
-  integration is reference design (see the status banner in the base SAP MCP integration documentation).
+- **Not run end-to-end.** This flow is in preview — no live SAML SSO or real-user SAP audit proof
+  exists here. The blocker is upstream (the AgentCore 3LO token vault), not a missing deployment
+  module. The whole SAP-MCP integration is reference design (see the status banner in the base SAP
+  MCP integration documentation).
 - **THE load-bearing UNVERIFIED fact:** the **SOAUTH2↔SAML2 linkage** (S5) — that SAP's OAuth
   authorize endpoint delegates human logon to the SAML2 trusted provider — is grounded only in the
   AWS row *"SAP OAuth2 client + SAML trusted provider"* + a title-only help.sap.com

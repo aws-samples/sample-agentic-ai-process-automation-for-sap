@@ -4,10 +4,10 @@
 #
 # Detect container runtime (Docker → Finch fallback) and export CDK_DOCKER.
 # Source this before running cdk commands:
-#   source scripts/setup-container-runtime.sh
+#   source scripts/dev/setup-container-runtime.sh
 #
 # Or run standalone to check:
-#   bash scripts/setup-container-runtime.sh
+#   bash scripts/dev/setup-container-runtime.sh
 
 _setup_container_runtime() {
   # Already set by user — respect it

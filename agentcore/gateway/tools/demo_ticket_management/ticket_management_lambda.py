@@ -16,16 +16,24 @@ from datetime import datetime, timezone
 
 import boto3
 
+# Canonical case identity codec — ships in the shared_types layer. The agent
+# supplies the case_id it was invoked with, so it is normalized once here rather
+# than parsed ad hoc.
+from case_key import to_case_key, try_normalize_case_id
+
 # Ticket model + validator ship in the shared_types Lambda layer. Best-effort
 # import: absent in local dev/test (validation no-ops), present in the Lambda.
 try:
-    from generated_tickets import Ticket
+    from generated_tickets import ResponseType, Ticket
     from validate import validate_or_log
 except ImportError:
     Ticket = None
+    VALID_RESPONSE_TYPES = {"approval", "free_text"}
 
     def validate_or_log(model, data, *, context=""):
         return data
+else:
+    VALID_RESPONSE_TYPES = {response_type.value for response_type in ResponseType}
 
 
 logger = logging.getLogger()
@@ -34,8 +42,7 @@ logger.setLevel(logging.INFO)
 dynamodb = boto3.resource("dynamodb")
 _table = None
 
-# Keep in sync with types/tickets.schema.json (TicketStatus, TicketPriority)
-VALID_STATUSES = {"open", "assigned", "approved", "denied", "replied", "closed"}
+# Keep in sync with types/tickets.schema.json (TicketPriority)
 VALID_PRIORITIES = {"high", "medium", "low"}
 
 
@@ -55,7 +62,14 @@ def _create_ticket(event: dict) -> dict:
     if not title:
         return {"error": "title is required"}
 
+    response_type = event.get("response_type", "approval")
+    if response_type not in VALID_RESPONSE_TYPES:
+        return {
+            "error": f"response_type must be one of: {sorted(VALID_RESPONSE_TYPES)}"
+        }
+
     now = datetime.now(timezone.utc).isoformat()
+    case_id = try_normalize_case_id(event.get("case_id"))
     ticket = {
         "ticket_id": f"TKT-{uuid.uuid4().hex[:8].upper()}",
         "title": title,
@@ -66,9 +80,9 @@ def _create_ticket(event: dict) -> dict:
         else "medium",
         "created_by": "agent",
         "assigned_to": event.get("assigned_to", ""),
-        "case_id": event.get("case_id", ""),
+        "case_id": case_id or "",
         "category": event.get("category", "general"),
-        "response_type": event.get("response_type", "approval"),
+        "response_type": response_type,
         "resolution": "",
         "comments": [],
         "created_at": now,
@@ -79,10 +93,8 @@ def _create_ticket(event: dict) -> dict:
     _get_table().put_item(Item=ticket)
 
     # Write ticket_id back to the linked case for correlation
-    case_id = event.get("case_id", "")
-    if case_id and "#" in case_id:
+    if case_id:
         try:
-            doc, item_id = case_id.split("#", 1)
             cases_param = os.environ.get("CASES_TABLE_SSM_PARAM", "")
             if cases_param:
                 ssm = boto3.client("ssm")
@@ -91,66 +103,15 @@ def _create_ticket(event: dict) -> dict:
                 ]
                 cases_table = dynamodb.Table(cases_table_name)
                 cases_table.update_item(
-                    Key={"document_number": doc, "item_id": item_id},
+                    Key=to_case_key(case_id),
                     UpdateExpression="SET ticket_id = :tid",
                     ExpressionAttributeValues={":tid": ticket["ticket_id"]},
-                    ConditionExpression="attribute_exists(document_number)",
+                    ConditionExpression="attribute_exists(case_id)",
                 )
         except Exception as e:
             logger.warning(f"Failed to write ticket_id to case {case_id}: {e}")
 
     return {"content": [{"type": "text", "text": json.dumps(ticket, default=str)}]}
-
-
-def _update_ticket(event: dict) -> dict:
-    ticket_id = event.get("ticket_id", "")
-    if not ticket_id:
-        return {"error": "ticket_id is required"}
-
-    now = datetime.now(timezone.utc).isoformat()
-    update_parts = ["updated_at = :ts"]
-    expr_values = {":ts": now}
-    expr_names = {}
-
-    for key in ("status", "assigned_to", "priority", "resolution", "category"):
-        if key in event:
-            val = event[key]
-            if key == "status" and val not in VALID_STATUSES:
-                return {"error": f"Invalid status: {val}"}
-            update_parts.append(f"#{key} = :{key}")
-            expr_names[f"#{key}"] = key
-            expr_values[f":{key}"] = val
-
-    comment_text = event.get("comment", "").strip()
-    if comment_text:
-        comment = {
-            "author": event.get("comment_author", "agent"),
-            "text": comment_text,
-            "timestamp": now,
-        }
-        update_parts.append(
-            "comments = list_append(if_not_exists(comments, :empty), :comment)"
-        )
-        expr_values[":empty"] = []
-        expr_values[":comment"] = [comment]
-
-    table = _get_table()
-    try:
-        resp = table.update_item(
-            Key={"ticket_id": ticket_id},
-            UpdateExpression="SET " + ", ".join(update_parts),
-            ExpressionAttributeNames=expr_names if expr_names else None,
-            ExpressionAttributeValues=expr_values,
-            ConditionExpression="attribute_exists(ticket_id)",
-            ReturnValues="ALL_NEW",
-        )
-        return {
-            "content": [
-                {"type": "text", "text": json.dumps(resp["Attributes"], default=str)}
-            ]
-        }
-    except dynamodb.meta.client.exceptions.ConditionalCheckFailedException:
-        return {"error": f"Ticket {ticket_id} not found"}
 
 
 def _get_ticket(event: dict) -> dict:
@@ -163,32 +124,6 @@ def _get_ticket(event: dict) -> dict:
     if not item:
         return {"content": [{"type": "text", "text": f"No ticket found: {ticket_id}"}]}
     return {"content": [{"type": "text", "text": json.dumps(item, default=str)}]}
-
-
-def _list_tickets(event: dict) -> dict:
-    scan_kwargs = {}
-    filter_parts = []
-    expr_names = {}
-    expr_values = {}
-
-    if event.get("status"):
-        filter_parts.append("#s = :status")
-        expr_names["#s"] = "status"
-        expr_values[":status"] = event["status"]
-
-    if event.get("assigned_to"):
-        filter_parts.append("assigned_to = :assigned")
-        expr_values[":assigned"] = event["assigned_to"]
-
-    if filter_parts:
-        scan_kwargs["FilterExpression"] = " AND ".join(filter_parts)
-        if expr_names:
-            scan_kwargs["ExpressionAttributeNames"] = expr_names
-        scan_kwargs["ExpressionAttributeValues"] = expr_values
-
-    items = _get_table().scan(**scan_kwargs).get("Items", [])
-    items.sort(key=lambda x: x.get("updated_at", ""), reverse=True)
-    return {"content": [{"type": "text", "text": json.dumps(items, default=str)}]}
 
 
 def _resolve_tool_name(context) -> str:
@@ -219,9 +154,7 @@ def handler(event, context):
 
         dispatch = {
             "demo_create_ticket": _create_ticket,
-            "demo_update_ticket": _update_ticket,
             "demo_get_ticket": _get_ticket,
-            "demo_list_tickets": _list_tickets,
         }
 
         fn = dispatch.get(tool_name)

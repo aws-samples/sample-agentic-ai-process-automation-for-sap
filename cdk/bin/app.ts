@@ -24,9 +24,9 @@ import { resolveExternalStack, ExternalSapMcpStackInfo } from "../lib/utils/cfn-
 function emitResolvedProfile(): void {
   const repoRoot = path.join(__dirname, "..", "..")
   const script = path.join(repoRoot, "scripts", "deploy", "run_emit.py")
-  // Clear any stale artifact first so it is a pure function of the current config:
-  // run_emit writes nothing for cognito-basic (both axes no-op), so a leftover
-  // artifact from a prior non-cognito profile would otherwise mis-wire this synth.
+  // Clear any stale artifact first so it is a pure function of the current config.
+  // cognito-basic writes nothing only when sap_mcp is disabled; with sap_mcp
+  // enabled it emits the BASIC outbound Service-target block.
   fs.rmSync(path.join(repoRoot, ".auth-profile-resolved.json"), { force: true })
   try {
     execFileSync(process.env.PYTHON ?? "python3", [script, "--backend", "cdk"], {

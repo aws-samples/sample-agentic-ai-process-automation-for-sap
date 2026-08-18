@@ -6,42 +6,71 @@
 #
 # maturity: ga | preview | experimental — breadth of hardening. A profile's maturity
 #   is the weakest of its selected axis values.
-# status:   stub = not verified end-to-end. The model + validation exist, and the
-#   runtime may be fully wired, but the flow is unproven against a live system.
-#   Absent = proven. Drives the profiles vs preview_profiles split below.
+# status:   stub = this repository's CDK deployment path cannot stand the axis up
+#   end to end yet. Absent = that path supports the axis when documented external
+#   prerequisites are supplied; it does NOT claim ownership of those prerequisites
+#   or live-SAP proof.
+# blocked_by: repo | operator | upstream — WHY the axis is stub, on stub axes only.
+#   `status` alone conflates "we never built it" with "nothing live to point it
+#   at", and reads as the former. repo = wiring genuinely missing here.
+#   operator = wiring built, awaiting external config nobody in this repo owns.
+#   upstream = wiring built, blocked in an AWS service. Only `repo` is ours to
+#   clear by writing code. Defaults to `repo` when absent (the strict reading).
+# verified: true (profile-level) = this exact profile passed a live-SAP E2E run.
+#   These independent signals drive the profiles vs preview_profiles split below.
 # iac_module: present only on axis values that need a dedicated build step — today just
 #   mode/batch-runner (a net-new runtime). Every other value rides shared infra (the SAP
 #   MCP adapter + emitted auth artifact), so there is no per-axis module.
 axes:
   frontend:
     cognito:            { maturity: ga }
-    cognito+federated:  { maturity: preview,      issuer: cognito, status: stub }  # deploys as cognito; brokered federation unproven, and OBO impossible by design (JWT issuer stays Cognito)
+    cognito+federated:  { maturity: preview,      issuer: cognito, status: stub, blocked_by: operator }  # deploys as cognito; brokered federation unproven, and OBO impossible by design (JWT issuer stays Cognito)
     direct-entra:       { maturity: preview,      issuer: entra }  # verified E2E via the entra-obo profile
-    direct-okta:        { maturity: experimental, issuer: okta,  status: stub }
+    direct-okta:        { maturity: experimental, issuer: okta }  # issuer-parameterized, same code path as direct-entra; verified by a real login against an Okta trial org (PKCE public client, no secret)
   inbound:
     cognito:            { maturity: ga,           issuer: cognito }
     entra:              { maturity: preview,      issuer: entra }  # verified E2E via the entra-obo profile
-    okta:               { maturity: preview,      issuer: okta,  status: stub }
+    okta:               { maturity: preview,      issuer: okta }  # same jwt-authorizer as entra (backend-stack.ts, isExternalIssuer branch); real Okta id_token accepted 2026-07-31, request reached the Cases Lambda
   mode:
     autonomous:         { maturity: ga,           requires_refresh: false }
     live:               { maturity: ga,           requires_refresh: false }
-    batch:              { maturity: experimental, requires_refresh: true, iac_module: mode/batch-runner, status: stub }  # iac_module presence drives batch-runner provisioning (run_emit._mode_block)
+    # requires_refresh is advisory metadata, NOT the gate: it describes the
+    # user-identity flavour of batch (acting as an absent human). A service identity
+    # re-mints per run, so validate_profile only enforces refresh when the outbound
+    # propagates user identity. iac_module presence drives batch-runner provisioning
+    # (run_emit._mode_requires_cdk).
+    batch:              { maturity: preview,      requires_refresh: true, iac_module: mode/batch-runner }
   outbound:
     basic:              { maturity: ga,           mcp_oauth_flow: BASIC }
     m2m-sap:            { maturity: ga,           mcp_oauth_flow: M2M,             issuer: sap }
-    m2m-oidc:           { maturity: preview,      mcp_oauth_flow: M2M,             status: stub }
-    user-federation:    { maturity: preview,      mcp_oauth_flow: USER_FEDERATION, supports_refresh: true, status: stub }  # E2E verification is blocked on an unresolved issue in AgentCore Identity's 3LO token vault (see docs/sap/SAP_MCP_USER_FEDERATION.md).
+    m2m-oidc:           { maturity: preview,      mcp_oauth_flow: M2M,             status: stub, blocked_by: operator }  # probed on Entra: SAP 401s, no user mapped from a machine token — open question is SAP-side SOIDC claim mapping
+    user-federation:    { maturity: preview,      mcp_oauth_flow: USER_FEDERATION, supports_refresh: true, status: stub, blocked_by: upstream }  # E2E verification is blocked on an unresolved issue in AgentCore Identity's 3LO token vault (see docs/sap/SAP_MCP_USER_FEDERATION.md).
     obo:                { maturity: preview,      mcp_oauth_flow: ON_BEHALF_OF_TOKEN_EXCHANGE, mcp_supported: false, obo_direct_mcp: true, issuer: entra }  # verified E2E via the entra-obo profile
-    obo-okta:           { maturity: experimental, mcp_oauth_flow: ON_BEHALF_OF_TOKEN_EXCHANGE, mcp_supported: false, obo_direct_mcp: true, issuer: okta,  status: stub }
+    obo-okta:           { maturity: experimental, mcp_oauth_flow: ON_BEHALF_OF_TOKEN_EXCHANGE, mcp_supported: false, obo_direct_mcp: true, issuer: okta,  status: stub, blocked_by: repo }  # unbuilt here, but the ceiling is Okta: OBO is an RFC 7523 jwt-bearer exchange at the IdP token endpoint, and the Okta trial org we probed advertises neither jwt-bearer nor token-exchange on either AS. The generic CustomOauth2 provider in lambdas/oauth2_provider_cr already exists — building more of it would land on an endpoint that cannot exchange.
 
-# profiles         = deployable today; every selected axis value is proven (no stub).
-# preview_profiles = valid, resolvable topologies with >=1 unproven (stub) axis. They
-#                    validate but are not yet proven E2E. Promote a profile up when its
-#                    stub axes clear. resolve_profile() accepts a name from either block.
+# profiles         = supported by this repository's CDK deployment path; every
+#                    selected axis has the required repository wiring (no stub).
+#                    External prerequisites remain operator-owned, and live-SAP
+#                    proof is tracked separately by profile-level verified:true.
+# preview_profiles = valid, resolvable topologies with >=1 stub axis that the CDK
+#                    deployment path does not yet support. Promote a profile when
+#                    its stub axes clear. resolve_profile() accepts either block.
 profiles:
-  cognito-basic:        { frontend: cognito, inbound: cognito, mode: [autonomous, live], outbound: basic }      # DEFAULT
+  # SAP identity is the configured Basic technical user — this profile does NOT prove
+  # per-user propagation (that is entra-obo's result and does not transfer).
+  cognito-basic:        { frontend: cognito, inbound: cognito, mode: [autonomous, live], outbound: basic, verified: true }      # DEFAULT — verified E2E on both declared modes, 2026-08-03
   cognito-m2m:          { frontend: cognito, inbound: cognito, mode: [autonomous, live], outbound: m2m-sap }
+  # Batch rides the autonomous pipeline's queue + invoker, so it must select
+  # `autonomous` too (the CDK gate enforces this). Identity at SAP is the technical
+  # user, exactly as the unattended poller path — no stored refresh token involved.
+  cognito-m2m-batch:    { frontend: cognito, inbound: cognito, mode: [autonomous, live, batch], outbound: m2m-sap }
   entra-obo:            { frontend: direct-entra,      inbound: entra,   mode: [live],        outbound: obo, verified: true }  # verified E2E (S/4HANA 2023, SAP_BASIS 7.58) — see docs/sap/runbooks/soidc-entra-obo.md
+  # Isolates the two Okta axes (frontend + inbound) against a GA outbound, so they
+  # could be proven without waiting on `user-federation` (upstream-blocked in
+  # AgentCore Identity's 3LO vault). SAP identity here is the Basic technical user
+  # — this profile proves Okta INBOUND only, not per-user SAP propagation, so it
+  # earns `profiles` membership but NOT `verified` (no live-SAP run through it).
+  okta-basic:           { frontend: direct-okta,       inbound: okta,    mode: [live],        outbound: basic }
 
 preview_profiles:  # valid topologies, >=1 unproven axis — see the status:stub values above
   cognito-userfed-ias:  { frontend: cognito,           inbound: cognito, mode: [live],        outbound: user-federation }

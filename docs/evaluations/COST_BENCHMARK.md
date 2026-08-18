@@ -7,7 +7,7 @@ SPDX-License-Identifier: Apache-2.0
 
 Measures the real Bedrock cost of processing AP exceptions end-to-end — from SAP document creation through agent analysis, ticket-based human approval, and post-approval SAP execution. Every token is tracked per-case across all agent invocations.
 
-This doc is the **benchmark result**. For static per-service infrastructure pricing and the cost-at-volume model, see [INFERENCE_COST_OPTIMIZATION.md](INFERENCE_COST_OPTIMIZATION.md). To reduce the per-case number, see the optimization levers there too.
+This doc is the **historical benchmark result**. The lifecycle-complete August 2026 rerun is analyzed in [AP Cost Benchmark Analysis — August 2026](AP_COST_BENCHMARK_2026_08.md). Read that analysis before comparing the `$0.26` baseline with the current `$0.52` result: the runs differ in cost coverage, callback depth, Agent Knowledge use, and model generation. For static per-service infrastructure pricing and the cost-at-volume model, see [INFERENCE_COST_OPTIMIZATION.md](INFERENCE_COST_OPTIMIZATION.md). To reduce the per-case number, see the optimization levers there too.
 
 ## Results Summary
 
@@ -73,13 +73,15 @@ Six cases completed the full cycle: analyze → create ticket → approve → ex
 
 ### Token Distribution
 
-| Metric | Per Invocation (avg) | Total (41 cases) |
+| Metric | Per Invocation (avg) | Total (41 cases, 46 invocations) |
 |--------|---------------------|-------------------|
-| Input tokens | 25,000 | 1,025,000 |
-| Output tokens | 3,500 | 143,500 |
-| Cache read tokens | 250,000 | 10,250,000 |
+| Input tokens | 22,900 | 1,053,699 |
+| Output tokens | 3,200 | 142,483 |
+| Cache read tokens | 221,000 | 10,433,442 |
 
-**Prompt caching is the dominant cost factor.** The system prompt + SOP content (~200K tokens) is cached and reused across turns within each invocation. At $0.30/M tokens (Sonnet cache read rate), this is 10x cheaper than re-sending the full prompt each turn. Without caching, the average cost per case would be approximately $0.70.
+**Prompt caching is the dominant cost factor.** At $0.30/M tokens (Sonnet cache read rate) this is 10x cheaper than re-sending the prompt on each turn; without caching the average cost per case would be roughly $0.70.
+
+Read the 221K as a **sum across the invocation's 5–7 turns, not the size of the cached prompt.** The assembled system prompt — persona + shared platform mechanics + routed SOP — measures **4.5K–5.2K tokens** per process type (`resolve_skill(pt)["system_prompt"]`, ~18–21K chars). What grows the per-turn cache read is the conversation accumulating behind it: every tool result stays in context and is re-read on every later turn, so one unscoped `odata_read` of a 100-field entity is billed many times over. That is the lever [INFERENCE_COST_OPTIMIZATION.md](INFERENCE_COST_OPTIMIZATION.md) Optimization 3 actually pulls — scope the reads, not the SOP prose.
 
 ### Agent Outcomes
 
@@ -245,7 +247,7 @@ python scripts/ops/infra_cost_report.py --stack-name erp-accrual-agent --days 30
 
 **Trace save timing.** The cost accumulator writes after the agent stream completes, which is after the case status changes. The runner adds a 15-second delay before the final read so traces are persisted.
 
-**Prompt caching impact.** The ~250K cache read tokens per invocation are the system prompt + SOP content cached across turns. Without caching, each invocation would consume ~250K additional input tokens at $3.00/M instead of $0.30/M, roughly tripling per-case cost.
+**Prompt caching impact.** The ~221K cache read tokens per invocation are the whole cached prefix re-read on each of the invocation's 5–7 turns — the ~4–5K system prompt plus everything the conversation has accumulated, dominated by tool results. Without caching each invocation would consume those tokens at $3.00/M instead of $0.30/M, roughly tripling per-case cost.
 
 **Stuck cases.** ~10–15% of cases remain in `processing` at benchmark end (long SAP read chains or runtime timeout without a status update). They typically have partial cost data. Increasing `--max-wait` captures more; some need manual investigation.
 

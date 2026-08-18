@@ -1,0 +1,131 @@
+UNIT-OF-MEASURE MISMATCH — INVOICE EXCEPTION RESOLUTION
+STANDARD OPERATING PROCEDURE (SOP)
+Version 1.0
+
+================================================================================
+PURPOSE
+================================================================================
+
+This SOP defines how the agent resolves a UNIT-OF-MEASURE (UoM) MISMATCH
+exception, where the supplier invoice expresses quantity in a different unit
+than the purchase order (PO) or goods receipt (GR) in SAP S/4HANA (e.g. invoice
+in EACH, PO in CASE). It applies after three-way-match classification has
+identified the exception as a UoM mismatch.
+
+The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT",
+"SHOULD", "SHOULD NOT", "RECOMMENDED", "MAY", and "OPTIONAL" in this
+document are to be interpreted as described in RFC 2119.
+
+================================================================================
+SCOPE
+================================================================================
+
+Process Type: uom_mismatch
+SAP Modules:  MM (Materials Management), FI-AP (Accounts Payable)
+SAP Service:  API_SUPPLIERINVOICE_PROCESS_SRV
+Entities:     A_SupplierInvoice, A_PurchaseOrderItem, A_MaterialDocumentHeader
+
+================================================================================
+PRECONDITIONS
+================================================================================
+
+Before execution, the following MUST be true:
+
+1. The SAP MCP Server is reachable for reads and function imports.
+2. The case payload contains the supplier invoice number and fiscal year.
+3. The agent has NO memory of prior runs — each execution is stateless.
+
+================================================================================
+STEP 1: GATHER DATA
+================================================================================
+
+1.1  The agent MUST retrieve the invoice line UoM and quantity
+     (A_SupplierInvoice).
+1.2  The agent MUST retrieve the PO item order UoM, order quantity, and the UoM
+     conversion factor(s) (A_PurchaseOrderItem), plus the GR UoM
+     (A_MaterialDocumentHeader) where present.
+1.3  The agent MUST NOT invent a conversion factor. IF the PO does not define a
+     conversion between the two units, the agent MUST escalate per STEP 3.3.
+
+================================================================================
+STEP 2: ATTEMPT UoM RECONCILIATION
+================================================================================
+
+2.1  The agent MUST convert the invoice quantity into the PO base UoM using the
+     PO/material conversion factor, then compute, using the calculator tool:
+       reconciled_variance_pct = |converted_invoice_qty - po_qty| / po_qty × 100
+
+================================================================================
+STEP 3: APPLY RESOLUTION LOGIC
+================================================================================
+
+3.1  IF a valid conversion exists AND reconciled_variance_pct does not exceed
+     {{QTY_VARIANCE_PCT}}%:
+     - The agent MUST treat the UoM mismatch as reconciled and proceed to post
+       the invoice (STEP 4), documenting the conversion applied.
+
+3.2  IF a valid conversion exists BUT reconciled_variance_pct exceeds
+     {{QTY_VARIANCE_PCT}}%:
+     - The residual difference is a genuine quantity discrepancy. The agent MUST
+       route the case as a quantity_variance exception and follow that SOP.
+
+3.3  IF no valid conversion factor exists between the invoice UoM and the PO UoM:
+     - The agent MUST send an email to {{CONTACT_PROCUREMENT}} asking for the
+       correct unit of measure or conversion factor. Include PO#, invoice#, the
+       invoice UoM, and the PO UoM.
+     - The agent MUST update case state to "awaiting_human_input" and STOP.
+     - When procurement responds, the agent MUST re-run STEP 2 with the provided
+       conversion.
+
+================================================================================
+STEP 4: EXECUTE RESOLUTION
+================================================================================
+
+4.1  The agent MUST NOT attempt to park the invoice — the service exposes no
+     Park function import. Once the UoM is reconciled, the agent MUST clear a
+     blocked invoice with the Release function import, or post an invoice parked
+     upstream with the Post function import.
+4.2  The agent MUST update case state after each SAP write and record the
+     conversion factor used.
+4.3  IF a write fails, the agent MUST set the case to 'error', notify
+     {{CONTACT_AP_TEAM}} with the error, and STOP.
+
+================================================================================
+STEP 5: CLOSE CASE
+================================================================================
+
+5.1  The agent MUST update case status to 'complete' once the invoice is posted.
+5.2  The agent SHOULD send a summary to {{CONTACT_AP_TEAM}}.
+
+================================================================================
+ESCALATION RULES
+================================================================================
+
+| Trigger                              | Action                               |
+|--------------------------------------|--------------------------------------|
+| No conversion factor available       | Query {{CONTACT_PROCUREMENT}}        |
+| Residual quantity difference         | Route as quantity_variance           |
+| SAP write failure                    | Notify {{CONTACT_AP_TEAM}}, set error|
+
+================================================================================
+CONTACTS
+================================================================================
+
+- Procurement: {{CONTACT_PROCUREMENT}}
+- AP Team:     {{CONTACT_AP_TEAM}}
+
+================================================================================
+TOLERANCES (CONFIGURABLE — DECLARED IN skills/finance_ap/config.json)
+================================================================================
+
+| Parameter                          | Symbol                  |
+|------------------------------------|-------------------------|
+| Reconciliation tolerance (percent) | {{QTY_VARIANCE_PCT}}    |
+
+================================================================================
+REVISION HISTORY
+================================================================================
+
+| Version | Date       | Author | Changes                              |
+|---------|------------|--------|--------------------------------------|
+| 1.0     | 2026-07-21 | Kiro   | Initial focused SOP (new UoM path)   |

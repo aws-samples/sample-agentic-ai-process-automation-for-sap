@@ -96,8 +96,9 @@ resource "aws_lambda_function" "exemplar_builder" {
 
   environment {
     variables = {
-      CASES_TABLE = aws_dynamodb_table.cases.name
-      SOP_BUCKET  = aws_s3_bucket.sops.bucket
+      CASES_TABLE            = aws_dynamodb_table.cases.name
+      SOP_BUCKET             = aws_s3_bucket.sops.bucket
+      PROCESS_TYPE_SKILL_MAP = jsonencode(local.process_type_skill_map)
     }
   }
 

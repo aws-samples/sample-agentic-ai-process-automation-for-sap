@@ -34,44 +34,52 @@
           "type": "string",
           "enum": ["approval", "free_text"],
           "description": "Expected response type: 'approval' for approve/deny workflow, 'free_text' when you need a written answer from the reviewer (default: approval)"
+        },
+        "proposed_write": {
+          "type": "object",
+          "description": "The SAP write you are asking permission to make. Supply it whenever the ticket asks for approval of a write; omit it when you are only asking a question. The console renders it as a before/after diff instead of prose, and verifies your 'current' values against what this run actually read.",
+          "properties": {
+            "op": {
+              "type": "string",
+              "enum": ["update", "create", "function_import"],
+              "description": "Which write you intend"
+            },
+            "service": {
+              "type": "string",
+              "description": "OData service name, e.g. API_SUPPLIERINVOICE_PROCESS_SRV"
+            },
+            "entity": {
+              "type": "string",
+              "description": "Entity set for update/create, or the function name for function_import"
+            },
+            "key": {
+              "type": "string",
+              "description": "Key values of the record, slash-joined, e.g. 5105600000/2026"
+            },
+            "fields": {
+              "type": "array",
+              "description": "One entry per field the write changes. A function_import lists its parameters.",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "name": { "type": "string", "description": "SAP field name" },
+                  "current": {
+                    "type": "string",
+                    "description": "The value in SAP today. Only include it if you read this value in this run — omit it rather than guessing."
+                  },
+                  "proposed": {
+                    "type": "string",
+                    "description": "The value you intend to write"
+                  }
+                },
+                "required": ["name", "proposed"]
+              }
+            }
+          },
+          "required": ["op", "fields"]
         }
       },
       "required": ["title", "description"]
-    }
-  },
-  {
-    "name": "demo_update_ticket",
-    "description": "Update an existing ticket in the demo ticket management system — change status, reassign, add comments, or record a resolution. Use status 'approved' or 'denied' for approval workflows.",
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "ticket_id": {
-          "type": "string",
-          "description": "Ticket ID (e.g. TKT-A1B2C3D4)"
-        },
-        "status": {
-          "type": "string",
-          "enum": ["open", "assigned", "approved", "denied", "replied", "closed"],
-          "description": "New ticket status — values from tickets.schema.json TicketStatus"
-        },
-        "assigned_to": {
-          "type": "string",
-          "description": "Reassign to a different person or team"
-        },
-        "resolution": {
-          "type": "string",
-          "description": "Resolution notes (when closing or deciding)"
-        },
-        "comment": {
-          "type": "string",
-          "description": "Add a comment to the ticket"
-        },
-        "comment_author": {
-          "type": "string",
-          "description": "Author of the comment (default: agent)"
-        }
-      },
-      "required": ["ticket_id"]
     }
   },
   {
@@ -86,24 +94,6 @@
         }
       },
       "required": ["ticket_id"]
-    }
-  },
-  {
-    "name": "demo_list_tickets",
-    "description": "List tickets from the demo ticket management system, optionally filtered by status or assignee.",
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "status": {
-          "type": "string",
-          "enum": ["open", "assigned", "approved", "denied", "closed"],
-          "description": "Filter by status — values from tickets.schema.json TicketStatus"
-        },
-        "assigned_to": {
-          "type": "string",
-          "description": "Filter by assignee"
-        }
-      }
     }
   }
 ]

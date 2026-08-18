@@ -1,0 +1,135 @@
+QUANTITY VARIANCE — INVOICE EXCEPTION RESOLUTION
+STANDARD OPERATING PROCEDURE (SOP)
+Version 1.0
+
+================================================================================
+PURPOSE
+================================================================================
+
+This SOP defines how the agent resolves a QUANTITY VARIANCE exception, where the
+supplier invoice quantity differs from the goods receipt (GR) quantity in SAP
+S/4HANA. It applies after three-way-match classification has identified the
+exception as a quantity variance.
+
+The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT",
+"SHOULD", "SHOULD NOT", "RECOMMENDED", "MAY", and "OPTIONAL" in this
+document are to be interpreted as described in RFC 2119.
+
+================================================================================
+SCOPE
+================================================================================
+
+Process Type: quantity_variance
+SAP Modules:  MM (Materials Management), FI-AP (Accounts Payable)
+SAP Service:  API_SUPPLIERINVOICE_PROCESS_SRV
+Entities:     A_SupplierInvoice, A_PurchaseOrderItem, A_MaterialDocumentHeader
+
+================================================================================
+PRECONDITIONS
+================================================================================
+
+Before execution, the following MUST be true:
+
+1. The SAP MCP Server is reachable for reads and function imports.
+2. The case payload contains the supplier invoice number and fiscal year.
+3. The agent has NO memory of prior runs — each execution is stateless.
+
+================================================================================
+STEP 1: GATHER DATA
+================================================================================
+
+1.1  The agent MUST retrieve the invoice line quantity (A_SupplierInvoice) and
+     the PO reference.
+1.2  The agent MUST retrieve the goods receipt quantity from the material
+     document (A_MaterialDocumentHeader) for the same PO line.
+1.3  The agent MUST NOT fabricate a GR quantity. IF no GR exists, the agent MUST
+     route the case as a missing_goods_receipt exception instead.
+
+================================================================================
+STEP 2: CALCULATE VARIANCE
+================================================================================
+
+2.1  The agent MUST compute the quantity variance using the calculator tool:
+       qty_variance_pct   = |invoice_qty - gr_qty| / gr_qty × 100
+       qty_variance_units = |invoice_qty - gr_qty|
+2.2  Both limits MUST be breached for the variance to be ABOVE tolerance:
+       ABOVE  tolerance = qty_variance_pct > {{QTY_VARIANCE_PCT}}%
+                          AND qty_variance_units > {{QTY_VARIANCE_UNITS}} units
+       WITHIN tolerance = anything else
+     Breaching only one limit is WITHIN tolerance. A small order breaching the
+     percentage on a handful of units, and a large order breaching the unit
+     count at a fraction of a percent, are both immaterial; escalating either
+     is noise. Exceeding both is the signal.
+
+================================================================================
+STEP 3: APPLY RESOLUTION LOGIC
+================================================================================
+
+3.1  IF the variance is WITHIN tolerance:
+     - The agent MUST auto-accept and proceed to post the invoice (STEP 4).
+
+3.2  IF the variance is ABOVE tolerance AND invoice_qty < gr_qty (under-billing):
+     - The agent MUST auto-accept the lower invoiced quantity and proceed to
+       post (STEP 4). Under-delivery does not require approval.
+
+3.3  IF the variance is ABOVE tolerance AND invoice_qty > gr_qty (over-billing):
+     - The agent MUST send an approval request to {{CONTACT_PROCUREMENT}} with
+       PO#, invoice#, quantity difference, and $ impact.
+     - The agent MUST update case state to "awaiting_human_input" and STOP.
+     - IF approved → proceed to post (STEP 4).
+     - IF denied → the agent MUST mark the case for manual review by
+       {{CONTACT_AP_TEAM}}.
+
+================================================================================
+STEP 4: EXECUTE RESOLUTION
+================================================================================
+
+4.1  The agent MUST NOT attempt to park the invoice — the service exposes no
+     Park function import. Once any required approval is confirmed, the agent
+     MUST clear a blocked invoice with the Release function import, or post an
+     invoice parked upstream with the Post function import.
+4.2  The agent MUST update case state after each SAP write.
+4.3  IF a write fails, the agent MUST set the case to 'error', notify
+     {{CONTACT_AP_TEAM}} with the error, and STOP.
+
+================================================================================
+STEP 5: CLOSE CASE
+================================================================================
+
+5.1  The agent MUST update case status to 'complete' once the invoice is posted.
+5.2  The agent SHOULD send a summary to {{CONTACT_AP_TEAM}}.
+
+================================================================================
+ESCALATION RULES
+================================================================================
+
+| Trigger                              | Action                               |
+|--------------------------------------|--------------------------------------|
+| Over-billing above tolerance         | Approval from {{CONTACT_PROCUREMENT}}|
+| Approval denied                      | Manual review by {{CONTACT_AP_TEAM}} |
+| No goods receipt found               | Route as missing_goods_receipt       |
+
+================================================================================
+CONTACTS
+================================================================================
+
+- Procurement: {{CONTACT_PROCUREMENT}}
+- AP Team:     {{CONTACT_AP_TEAM}}
+
+================================================================================
+TOLERANCES (CONFIGURABLE — DECLARED IN skills/finance_ap/config.json)
+================================================================================
+
+| Parameter                          | Symbol                  |
+|------------------------------------|-------------------------|
+| Quantity variance — percentage     | {{QTY_VARIANCE_PCT}}    |
+| Quantity variance — absolute units | {{QTY_VARIANCE_UNITS}}  |
+
+================================================================================
+REVISION HISTORY
+================================================================================
+
+| Version | Date       | Author | Changes                              |
+|---------|------------|--------|--------------------------------------|
+| 1.0     | 2026-07-21 | Kiro   | Initial focused SOP split from       |
+|         |            |        | invoice_matching v1.0                |

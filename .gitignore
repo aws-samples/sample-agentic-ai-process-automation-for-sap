@@ -39,6 +39,9 @@ cdk/config.test.*.yaml
 # Generated at deploy time by scripts/deploy/emit_resolved_profile.py
 .auth-profile-resolved.json
 
+# Guided launcher local run state (non-secret, but machine-specific)
+.launcher/
+
 # git worktrees
 .claude/worktrees/
 
@@ -47,3 +50,13 @@ cdk/config.test.*.yaml
 
 # Local task/backlog notes (not version-controlled)
 .backlog/
+.publications/
+docs/TECHNICAL_CONTEXT.md
+
+# Generated code-review output (not version-controlled)
+semantic-review/
+playwright-responses/
+.playwright-mcp/
+
+# Cached human bearer token from the Gate 4 auth driver — never commit
+test-scripts/.gate4-token.json

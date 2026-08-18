@@ -12,7 +12,7 @@ import * as ssm from "aws-cdk-lib/aws-ssm"
 import { Construct } from "constructs"
 import type { AppConfig } from "../utils/config-manager"
 
-export type NotificationChannelType = "ses" | "servicenow" | "jira" | "slack" | "tickets"
+export type NotificationChannelType = "ses" | "servicenow" | "jira" | "tickets"
 
 /**
  * Pluggable notification channel construct.
@@ -21,7 +21,7 @@ export type NotificationChannelType = "ses" | "servicenow" | "jira" | "slack" | 
  * based on `notification.channel` in config.yaml.
  *
  * Outbound: env vars set on the notification Gateway Lambda (channel + secret).
- * Inbound:  SES receipt rule (ses) or Lambda Function URL (servicenow/jira/slack).
+ * Inbound:  SES receipt rule (ses) or Lambda Function URL (servicenow/jira).
  *
  * Call `attachToOutboundLambda()` for the notification tool Lambda.
  * Call `attachToInboundLambda()` for the webhook processor Lambda.
@@ -144,7 +144,7 @@ export class NotificationChannel extends Construct {
         new ssm.StringParameter(this, "WebhookUrlParam", {
           parameterName: `/${this.stackNameBase}/notification/webhook-url`,
           stringValue: webhookUrl,
-          description: "Webhook URL for inbound notifications (register in ServiceNow/Jira/Slack)",
+          description: "Webhook URL for inbound notifications (register in ServiceNow/Jira)",
         })
 
         new cdk.CfnOutput(this, "WebhookUrl", {

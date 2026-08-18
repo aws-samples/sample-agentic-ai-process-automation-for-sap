@@ -6,8 +6,8 @@
 AP Cost Benchmark Runner
 
 Creates AP exception cases in SAP (via the existing /test-data/ap-cases API),
-seeds them into DynamoDB, enqueues them for agent processing, simulates ticket
-approvals, and reports per-case Bedrock cost.
+seeds them into DynamoDB, enqueues them for agent processing, drives fixture-based
+human ticket responses, and reports per-case Bedrock cost and lifecycle validity.
 
 Usage:
     python agentcore/evals/ap_cost_benchmark/run_benchmark.py \
@@ -35,11 +35,14 @@ import requests
 
 POLL_INTERVAL = 15  # seconds between DynamoDB polls
 MAX_WAIT = 600  # max seconds to wait for all cases to complete
-ESCALATION_WAIT = 30  # seconds to wait before simulating ticket approvals
+ESCALATION_WAIT = 30  # seconds to wait for a ticket to become durable
+MAX_REVIEW_ROUNDS = 3
 CASES_FILE = Path(__file__).parent / "cases.json"
 
-# Statuses that mean the agent is still working
-PENDING_STATUSES = {"new", "processing", "analyzing"}
+ACTIVE_STATUSES = {"new", "detected", "processing", "analyzing", "investigating"}
+PAUSED_STATUS = "awaiting_human_input"
+TERMINAL_STATUSES = {"complete", "manual_review_required", "sap_updated"}
+INITIAL_STOP_STATUSES = {PAUSED_STATUS, *TERMINAL_STATUSES}
 
 
 def _ts() -> str:
@@ -61,15 +64,39 @@ def _get_ssm(ssm, stack: str, key: str) -> str:
 
 def _get_config(stack: str, region: str) -> dict:
     ssm = boto3.client("ssm", region_name=region)
+    cloudformation = boto3.client("cloudformation", region_name=region)
+    ticket_action_function = None
+    paginator = cloudformation.get_paginator("list_stack_resources")
+    for page in paginator.paginate(StackName=f"{stack}-backend"):
+        ticket_action_function = next(
+            (
+                resource["PhysicalResourceId"]
+                for resource in page.get("StackResourceSummaries", [])
+                if resource.get("ResourceType") == "AWS::Lambda::Function"
+                and resource.get("LogicalResourceId", "").startswith("TicketsLambda")
+            ),
+            None,
+        )
+        if ticket_action_function:
+            break
+    if not ticket_action_function:
+        raise RuntimeError(
+            f"Could not find TicketsLambda in CloudFormation stack {stack}-backend"
+        )
+
     config = {
         "demo_api_url": _get_ssm(ssm, stack, "demo/api-url").rstrip("/"),
         "api_url": _get_ssm(ssm, stack, "feedback-api-url").rstrip("/"),
         "cases_table": _get_ssm(ssm, stack, "dynamodb/cases-table"),
+        "tickets_table": _get_ssm(ssm, stack, "dynamodb/tickets-table"),
         "queue_name": f"{stack}-agent-queue.fifo",
+        "ticket_action_function": ticket_action_function,
     }
-    print(f"  Table:     {config['cases_table']}")
+    print(f"  Cases:     {config['cases_table']}")
+    print(f"  Tickets:   {config['tickets_table']}")
     print(f"  Queue:     {config['queue_name']}")
     print(f"  Demo API:  {config['demo_api_url']}")
+    print(f"  Actions:   {config['ticket_action_function']}")
     return config
 
 
@@ -86,6 +113,10 @@ def create_sap_cases(cases: list, demo_api_url: str) -> list:
             end=" ",
             flush=True,
         )
+        if case.get("po_number"):
+            print(f"PO={case['po_number']} (prepopulated; skipped creation)")
+            results.append(case)
+            continue
         call_start = time.time()
         try:
             resp = requests.post(
@@ -122,11 +153,12 @@ def seed_dynamodb_cases(cases: list, table_name: str, region: str):
                 continue
             batch.put_item(
                 Item={
+                    "case_id": f"{case['po_number']}-10",
                     "document_number": case["po_number"],
                     "item_id": "10",
                     "domain": "finance_ap",
                     "process_type": case["process_type"],
-                    "status": "new",
+                    "status": "detected",
                     "created_at": now,
                     "updated_at": now,
                     "benchmark_id": case["id"],
@@ -152,7 +184,7 @@ def enqueue_cases(cases: list, queue_name: str, region: str):
         if not case.get("po_number"):
             skipped += 1
             continue
-        case_id = f"{case['po_number']}#10"
+        case_id = f"{case['po_number']}-10"
         sqs.send_message(
             QueueUrl=queue_url,
             MessageBody=json.dumps(
@@ -170,166 +202,446 @@ def enqueue_cases(cases: list, queue_name: str, region: str):
 # Phase 3: Poll for completion
 
 
-def poll_completion(
-    cases: list, table_name: str, region: str, max_wait: int = MAX_WAIT
-) -> dict[str, dict]:
-    """Poll DynamoDB until all cases leave pending statuses."""
+def _invocation_count(item: dict) -> int:
+    return int(item.get("cost_summary", {}).get("invocation_count", 0))
+
+
+def poll_case_states(
+    cases: list,
+    table_name: str,
+    region: str,
+    max_wait: int,
+    stop_statuses: set[str],
+    minimum_invocations: dict[str, int] | None = None,
+) -> tuple[dict[str, dict], list[str]]:
+    """Wait for explicit states, optionally requiring a new agent invocation."""
     po_numbers = [c["po_number"] for c in cases if c.get("po_number")]
     pending = set(po_numbers)
-    results = {}
+    results: dict[str, dict] = {}
+    errors: list[str] = []
     start = time.time()
     last_status_log = ""
 
     while pending and (time.time() - start) < max_wait:
-        # Refresh client each iteration to avoid expired token on long runs
         table = boto3.resource("dynamodb", region_name=region).Table(table_name)
         newly_done = []
         for po in list(pending):
             try:
-                resp = table.get_item(Key={"document_number": po, "item_id": "10"})
+                resp = table.get_item(Key={"case_id": f"{po}-10"}, ConsistentRead=True)
             except Exception as e:
                 print(f"  [{_ts()}] DynamoDB error (will retry): {e}")
                 break
             item = resp.get("Item", {})
             status = item.get("status", "unknown")
-            if status not in PENDING_STATUSES:
+            baseline = (minimum_invocations or {}).get(po)
+            invocation_advanced = baseline is None or _invocation_count(item) > baseline
+            if status in stop_statuses and invocation_advanced:
                 results[po] = item
                 pending.discard(po)
                 bid = item.get("benchmark_id", po)
-                newly_done.append(f"{bid}→{status}")
+                newly_done.append(f"{bid}→{status} (inv={_invocation_count(item)})")
 
         if newly_done:
-            print(f"  [{_ts()}] Completed: {', '.join(newly_done)}")
+            print(f"  [{_ts()}] Reached stop state: {', '.join(newly_done)}")
 
         if pending:
-            # Show status breakdown of remaining cases
             statuses = Counter()
             for po in pending:
                 try:
-                    r = table.get_item(
-                        Key={"document_number": po, "item_id": "10"},
-                        ProjectionExpression="#s",
-                        ExpressionAttributeNames={"#s": "status"},
-                    )
-                    statuses[r.get("Item", {}).get("status", "unknown")] += 1
+                    r = table.get_item(Key={"case_id": f"{po}-10"}, ConsistentRead=True)
+                    item = r.get("Item", {})
+                    status = item.get("status", "unknown")
+                    baseline = (minimum_invocations or {}).get(po)
+                    if baseline is not None and _invocation_count(item) <= baseline:
+                        status = f"{status}/callback-pending"
+                    statuses[status] += 1
                 except Exception:
-                    statuses["error"] += 1
+                    statuses["read-error"] += 1
             status_str = ", ".join(f"{s}={n}" for s, n in sorted(statuses.items()))
-            elapsed = _elapsed(start)
-            # Only print if status changed or every 60s
             log_line = f"{len(pending)} pending ({status_str})"
             if (
                 log_line != last_status_log
                 or int(time.time() - start) % 60 < POLL_INTERVAL
             ):
-                print(f"  [{_ts()}] {log_line} [{elapsed}]")
+                print(f"  [{_ts()}] {log_line} [{_elapsed(start)}]")
                 last_status_log = log_line
             time.sleep(POLL_INTERVAL)
 
-    # Grab any remaining
     if pending:
-        print(f"  [{_ts()}] Timeout reached — {len(pending)} cases still pending")
         table = boto3.resource("dynamodb", region_name=region).Table(table_name)
-        for po in pending:
+        print(f"  [{_ts()}] Timeout reached — {len(pending)} cases unresolved")
+        for po in sorted(pending):
             try:
-                resp = table.get_item(Key={"document_number": po, "item_id": "10"})
-                results[po] = resp.get("Item", {})
-            except Exception:
-                results[po] = {}
+                item = table.get_item(
+                    Key={"case_id": f"{po}-10"}, ConsistentRead=True
+                ).get("Item", {})
+            except Exception as e:
+                item = {}
+                errors.append(f"{po}: final case read failed: {e}")
+            results[po] = item
+            status = item.get("status", "unknown")
+            baseline = (minimum_invocations or {}).get(po)
+            detail = f"status={status}, invocations={_invocation_count(item)}"
+            if baseline is not None:
+                detail += f", required>{baseline}"
+            errors.append(f"{po}: timed out ({detail})")
 
-    return results
+    return results, errors
 
 
-# Phase 4: Simulate ticket approvals
+# Phase 4: Drive human ticket responses
 
 
-def simulate_ticket_approvals(
-    cases: list, case_results: dict[str, dict], api_url: str, region: str = "us-east-1"
-) -> list[str]:
-    """Find tickets created by cases in awaiting_human_input and approve them."""
-    awaiting = [
-        c
-        for c in cases
-        if c.get("po_number")
-        and case_results.get(c["po_number"], {}).get("status") == "awaiting_human_input"
-    ]
-    if not awaiting:
-        print("  No cases in awaiting_human_input")
-        return []
+def _scan_case_tickets(table, case_id: str) -> list[dict]:
+    """Return every ticket linked to a case, following DynamoDB pagination."""
+    items: list[dict] = []
+    kwargs = {
+        "FilterExpression": "case_id = :case_id",
+        "ExpressionAttributeValues": {":case_id": case_id},
+        "ConsistentRead": True,
+    }
+    while True:
+        response = table.scan(**kwargs)
+        items.extend(response.get("Items", []))
+        last_key = response.get("LastEvaluatedKey")
+        if not last_key:
+            break
+        kwargs["ExclusiveStartKey"] = last_key
+    return items
 
-    with_ticket = sum(
-        1 for c in awaiting if case_results.get(c["po_number"], {}).get("ticket_id")
-    )
-    print(f"  {len(awaiting)} cases awaiting approval, {with_ticket} have ticket_id")
 
-    # Invoke the ticket action processor Lambda directly (bypasses Cognito auth)
-    lambda_client = boto3.client("lambda", region_name=region)
-    approved = []
-    no_ticket = []
-    failed = []
-    for case in awaiting:
-        item = case_results.get(case["po_number"], {})
-        ticket_id = _find_ticket_id(item)
-        if not ticket_id:
-            no_ticket.append(case["id"])
-            continue
-        try:
-            event = {
-                "pathParameters": {"id": ticket_id},
-                "body": json.dumps(
-                    {"action": "approved", "comment": "Benchmark auto-approval"}
+def _wait_for_actionable_ticket(
+    case: dict, case_item: dict, tickets_table: str, region: str
+) -> dict | None:
+    """Wait for the newest open/assigned ticket linked to this case."""
+    table = boto3.resource("dynamodb", region_name=region).Table(tickets_table)
+    case_id = f"{case['po_number']}-10"
+    deadline = time.time() + ESCALATION_WAIT
+    while time.time() < deadline:
+        ticket_id = case_item.get("ticket_id")
+        if ticket_id:
+            item = table.get_item(
+                Key={"ticket_id": ticket_id}, ConsistentRead=True
+            ).get("Item")
+            if item and item.get("status") in {"open", "assigned"}:
+                return item
+
+        tickets = _scan_case_tickets(table, case_id)
+        actionable = [
+            ticket for ticket in tickets if ticket.get("status") in {"open", "assigned"}
+        ]
+        if actionable:
+            return max(
+                actionable,
+                key=lambda ticket: ticket.get(
+                    "created_at", ticket.get("updated_at", "")
                 ),
-                "headers": {},
-            }
-            resp = lambda_client.invoke(
-                FunctionName="erp-accrual-agent-ticket-action-processor",
-                Payload=json.dumps(event),
             )
-            payload = json.loads(resp["Payload"].read())
-            status_code = payload.get("statusCode", 0)
-            if status_code == 200:
-                print(f"  [{_ts()}] {case['id']}: ✓ Approved {ticket_id}")
-                approved.append(case["po_number"])
-            else:
-                body = json.loads(payload.get("body", "{}"))
-                err = body.get("error", f"HTTP {status_code}")
-                print(f"  [{_ts()}] {case['id']}: ✗ {ticket_id} — {err}")
-                failed.append(case["id"])
-        except Exception as e:
-            print(f"  [{_ts()}] {case['id']}: ✗ Error — {e}")
-            failed.append(case["id"])
-
-    print(
-        f"\n  Approval summary: {len(approved)} approved, {len(no_ticket)} no ticket, {len(failed)} failed"
-    )
-    if no_ticket:
-        print(f"  No ticket: {', '.join(no_ticket)}")
-    return approved
-
-
-def _find_ticket_id(case_item: dict) -> str | None:
-    """Extract ticket_id from case item."""
-    tid = case_item.get("ticket_id")
-    if tid:
-        return tid
-    for trace in reversed(case_item.get("agent_traces", [])):
-        for seg in trace.get("segments", []):
-            if seg.get("type") == "tool" and "ticket" in seg.get("tool_name", ""):
-                result = seg.get("tool_result", "")
-                if isinstance(result, str) and "ticket_id" in result:
-                    try:
-                        data = json.loads(result)
-                        return data.get("ticket_id")
-                    except (json.JSONDecodeError, TypeError):
-                        pass
+        time.sleep(5)
     return None
+
+
+def _default_response_text(case: dict) -> str:
+    params = case["sap_params"]
+    po = case["po_number"]
+    process_type = case["process_type"]
+    if process_type == "missing_goods_receipt":
+        quantity = params.get("invoice_quantity", params.get("po_quantity"))
+        return (
+            f"Warehouse confirms {quantity} units were received against PO {po} "
+            "and authorizes the receipt correction required by the SOP."
+        )
+    if process_type == "missing_purchase_order":
+        return (
+            f"Procurement confirms PO {po}, item 10 is the correct open purchase "
+            "order for this invoice. Continue using that reference."
+        )
+    if process_type == "uom_mismatch":
+        return (
+            "Procurement confirms the invoice and PO quantities use equivalent units "
+            "with conversion factor 1.0. Continue with the confirmed quantities."
+        )
+    return (
+        "The reviewer confirms the documented quantities and amounts are correct. "
+        "Continue according to the applicable SOP."
+    )
+
+
+def _response_for_ticket(
+    case: dict, ticket: dict, observed_actions: list[str]
+) -> tuple[str, str | None]:
+    plan = case.get("human_response", {})
+    response_type = ticket.get("response_type", "approval")
+    configured_action = plan.get("action")
+    if configured_action in observed_actions:
+        configured_action = None
+    if response_type == "free_text":
+        action = configured_action or "replied"
+        if action != "replied":
+            raise ValueError(
+                f"fixture action {action} is incompatible with free_text ticket"
+            )
+        return action, plan.get("response_text") or _default_response_text(case)
+
+    action = configured_action or "approved"
+    if action not in {"approved", "denied"}:
+        raise ValueError(
+            f"fixture action {action} is incompatible with approval ticket"
+        )
+    return action, None
+
+
+def _submit_ticket_action(
+    case: dict,
+    ticket: dict,
+    action: str,
+    response_text: str | None,
+    ticket_action_function: str,
+    tickets_table: str,
+    region: str,
+) -> dict:
+    """Invoke the consolidated ticket action route and verify persistence."""
+    ticket_id = ticket["ticket_id"]
+    body = {
+        "action": action,
+        "comment": f"Benchmark reviewer submitted {action}",
+        "resolution": f"Benchmark {action} response",
+    }
+    if response_text:
+        body["response_text"] = response_text
+        body["resolution"] = response_text
+
+    event = {
+        "httpMethod": "POST",
+        "path": f"/tickets/{ticket_id}/action",
+        "pathParameters": {"id": ticket_id},
+        "body": json.dumps(body),
+        "headers": {},
+        "requestContext": {
+            "authorizer": {
+                "claims": {
+                    "sub": "benchmark-reviewer",
+                    "preferred_username": "benchmark-reviewer",
+                }
+            }
+        },
+    }
+    response = boto3.client("lambda", region_name=region).invoke(
+        FunctionName=ticket_action_function,
+        Payload=json.dumps(event),
+    )
+    payload = json.loads(response["Payload"].read())
+    if response.get("FunctionError"):
+        raise RuntimeError(f"Lambda {response['FunctionError']}: {payload}")
+    status_code = payload.get("statusCode", 0)
+    response_body = json.loads(payload.get("body", "{}"))
+    if status_code != 200:
+        raise RuntimeError(response_body.get("error", f"HTTP {status_code}"))
+    if not response_body.get("enqueued"):
+        raise RuntimeError("ticket action succeeded without enqueueing the case")
+    expected_case_id = f"{case['po_number']}-10"
+    if response_body.get("case_id") != expected_case_id:
+        raise RuntimeError(
+            f"callback case mismatch: {response_body.get('case_id')} != {expected_case_id}"
+        )
+
+    persisted = (
+        boto3.resource("dynamodb", region_name=region)
+        .Table(tickets_table)
+        .get_item(Key={"ticket_id": ticket_id}, ConsistentRead=True)
+        .get("Item", {})
+    )
+    if persisted.get("status") != action:
+        raise RuntimeError(
+            f"ticket status {persisted.get('status')} does not match {action}"
+        )
+    return persisted
+
+
+def drive_ticket_lifecycle(
+    cases: list,
+    case_results: dict[str, dict],
+    cases_table: str,
+    tickets_table: str,
+    ticket_action_function: str,
+    region: str,
+    max_wait: int,
+) -> tuple[dict[str, dict], dict[str, dict], list[str]]:
+    """Respond to tickets until every case reaches a supervised terminal state."""
+    lifecycle = {
+        case["id"]: {"actions": [], "errors": [], "valid": False}
+        for case in cases
+        if case.get("po_number")
+    }
+    errors: list[str] = []
+    blocked: set[str] = set()
+
+    for review_round in range(1, MAX_REVIEW_ROUNDS + 1):
+        awaiting = [
+            case
+            for case in cases
+            if case.get("po_number")
+            and case_results.get(case["po_number"], {}).get("status") == PAUSED_STATUS
+            and case["id"] not in blocked
+        ]
+        if not awaiting:
+            break
+        print(
+            f"  [{_ts()}] Review round {review_round}: "
+            f"{len(awaiting)} awaiting_human_input"
+        )
+        actioned: list[dict] = []
+        baselines: dict[str, int] = {}
+
+        for case in awaiting:
+            po = case["po_number"]
+            item = case_results[po]
+            record = lifecycle[case["id"]]
+            ticket = _wait_for_actionable_ticket(case, item, tickets_table, region)
+            if not ticket:
+                refreshed = (
+                    boto3.resource("dynamodb", region_name=region)
+                    .Table(cases_table)
+                    .get_item(Key={"case_id": f"{po}-10"}, ConsistentRead=True)
+                    .get("Item", {})
+                )
+                if refreshed.get("status") in TERMINAL_STATUSES:
+                    case_results[po] = refreshed
+                    print(
+                        f"  [{_ts()}] ✓ {case['id']}: reached "
+                        f"{refreshed['status']} while waiting for the next ticket"
+                    )
+                    continue
+                message = f"{case['id']}: no actionable ticket became durable"
+                print(f"  [{_ts()}] ✗ {message}")
+                record["errors"].append(message)
+                errors.append(message)
+                blocked.add(case["id"])
+                continue
+
+            try:
+                observed_actions = [entry["action"] for entry in record["actions"]]
+                action, response_text = _response_for_ticket(
+                    case, ticket, observed_actions
+                )
+                baselines[po] = _invocation_count(item)
+                persisted = _submit_ticket_action(
+                    case,
+                    ticket,
+                    action,
+                    response_text,
+                    ticket_action_function,
+                    tickets_table,
+                    region,
+                )
+                record["actions"].append(
+                    {
+                        "round": review_round,
+                        "ticket_id": ticket["ticket_id"],
+                        "response_type": ticket.get("response_type", "approval"),
+                        "action": action,
+                        "ticket_status": persisted.get("status"),
+                    }
+                )
+                actioned.append(case)
+                print(
+                    f"  [{_ts()}] ✓ {case['id']}: {action} "
+                    f"{ticket['ticket_id']} ({ticket.get('response_type', 'approval')})"
+                )
+            except Exception as e:
+                message = f"{case['id']}: ticket action failed: {e}"
+                print(f"  [{_ts()}] ✗ {message}")
+                record["errors"].append(message)
+                errors.append(message)
+                blocked.add(case["id"])
+
+        if not actioned:
+            break
+        updated, poll_errors = poll_case_states(
+            actioned,
+            cases_table,
+            region,
+            max_wait,
+            INITIAL_STOP_STATUSES,
+            baselines,
+        )
+        case_results.update(updated)
+        errors.extend(poll_errors)
+        for message in poll_errors:
+            po = message.split(":", 1)[0]
+            case = next(
+                (candidate for candidate in actioned if candidate["po_number"] == po),
+                None,
+            )
+            if case:
+                lifecycle[case["id"]]["errors"].append(message)
+                blocked.add(case["id"])
+
+    return case_results, lifecycle, errors
+
+
+def validate_final_lifecycle(
+    cases: list,
+    case_results: dict[str, dict],
+    lifecycle: dict[str, dict],
+) -> list[str]:
+    """Validate ticket actions against the final consistent case state."""
+    errors: list[str] = []
+
+    def add_error(record: dict, message: str) -> None:
+        if message not in record["errors"]:
+            record["errors"].append(message)
+        errors.append(message)
+
+    for case in cases:
+        po = case.get("po_number")
+        if not po:
+            continue
+
+        record = lifecycle[case["id"]]
+        status = case_results.get(po, {}).get("status", "unknown")
+        record["final_status"] = status
+        observed_actions = [entry["action"] for entry in record["actions"]]
+        expected_action = case.get("human_response", {}).get("action")
+
+        if expected_action and expected_action not in observed_actions:
+            add_error(
+                record,
+                f"{case['id']}: expected ticket action {expected_action}, "
+                f"observed {observed_actions or 'none'}",
+            )
+
+        explicit_statuses = case.get("expected_final_statuses")
+        if explicit_statuses:
+            expected_statuses = set(explicit_statuses)
+        elif observed_actions and observed_actions[-1] == "denied":
+            expected_statuses = {"manual_review_required"}
+        else:
+            expected_statuses = TERMINAL_STATUSES
+
+        record["expected_final_statuses"] = sorted(expected_statuses)
+        if status not in expected_statuses:
+            add_error(
+                record,
+                f"{case['id']}: final status {status} does not match "
+                f"expected {sorted(expected_statuses)} after actions "
+                f"{observed_actions or 'none'}",
+            )
+        record["valid"] = not record["errors"]
+
+    return errors
 
 
 # Phase 5: Report
 
 
-def generate_report(cases: list, case_results: dict[str, dict]) -> dict:
-    """Generate cost report from case results."""
+def generate_report(
+    cases: list,
+    case_results: dict[str, dict],
+    lifecycle: dict[str, dict],
+    validation_errors: list[str],
+) -> dict:
+    """Generate cost and lifecycle report from case results."""
     rows = []
     for case in cases:
         po = case.get("po_number")
@@ -337,6 +649,7 @@ def generate_report(cases: list, case_results: dict[str, dict]) -> dict:
             continue
         item = case_results.get(po, {})
         cs = item.get("cost_summary", {})
+        lifecycle_record = lifecycle.get(case["id"], {})
         rows.append(
             {
                 "id": case["id"],
@@ -349,6 +662,9 @@ def generate_report(cases: list, case_results: dict[str, dict]) -> dict:
                 "output_tokens": int(cs.get("total_output_tokens", 0)),
                 "cache_read_tokens": int(cs.get("total_cache_read_tokens", 0)),
                 "invocations": int(cs.get("invocation_count", 0)),
+                "ticket_actions": lifecycle_record.get("actions", []),
+                "lifecycle_valid": lifecycle_record.get("valid", False),
+                "lifecycle_errors": lifecycle_record.get("errors", []),
             }
         )
 
@@ -367,6 +683,17 @@ def generate_report(cases: list, case_results: dict[str, dict]) -> dict:
     print("\n  Status distribution:")
     for s, n in sorted(status_counts.items(), key=lambda x: -x[1]):
         print(f"    {s:30s} {n:3d}")
+
+    action_counts = Counter(
+        action["action"] for row in rows for action in row.get("ticket_actions", [])
+    )
+    valid_count = sum(1 for row in rows if row["lifecycle_valid"])
+    print(f"\n  Lifecycle-valid cases: {valid_count}/{len(rows)}")
+    print(f"  Ticket actions: {dict(action_counts)}")
+    if validation_errors:
+        print(f"  Validation errors ({len(validation_errors)}):")
+        for error in validation_errors:
+            print(f"    - {error}")
 
     if costs:
         total_tokens = sum(
@@ -449,7 +776,11 @@ def generate_report(cases: list, case_results: dict[str, dict]) -> dict:
             "avg_cost_usd": round(statistics.mean(costs), 4) if costs else 0,
             "median_cost_usd": round(statistics.median(costs), 4) if costs else 0,
             "status_distribution": dict(status_counts),
+            "lifecycle_valid_cases": valid_count,
+            "ticket_action_distribution": dict(action_counts),
+            "valid": not validation_errors and valid_count == len(rows),
         },
+        "validation_errors": validation_errors,
         "cases": rows,
     }
     report_path = Path(__file__).parent / "report.json"
@@ -534,78 +865,95 @@ def main():
     enqueue_cases(cases, config["queue_name"], args.region)
 
     print(
-        f"\n[{_ts()}] Phase 3: Waiting for agent processing (max {args.max_wait}s)..."
+        f"\n[{_ts()}] Phase 3: Waiting for a terminal or review state "
+        f"(max {args.max_wait}s)..."
     )
     phase_start = time.time()
-    case_results = poll_completion(
-        cases, config["cases_table"], args.region, args.max_wait
+    case_results, initial_errors = poll_case_states(
+        cases,
+        config["cases_table"],
+        args.region,
+        args.max_wait,
+        INITIAL_STOP_STATUSES,
     )
-    completed = sum(
-        1 for v in case_results.values() if v.get("status") not in PENDING_STATUSES
-    )
-    print(
-        f"  [{_ts()}] Phase 3 complete: {completed}/{len(case_results)} done "
-        f"in {_elapsed(phase_start)}"
-    )
-
-    # Phase 4: Simulate ticket approvals for all awaiting_human_input cases
-    awaiting_count = sum(
+    reached = sum(
         1
-        for c in cases
-        if c.get("po_number")
-        and case_results.get(c["po_number"], {}).get("status") == "awaiting_human_input"
+        for value in case_results.values()
+        if value.get("status") in INITIAL_STOP_STATUSES
     )
-    if awaiting_count > 0:
-        print(
-            f"\n[{_ts()}] Phase 4: Simulating ticket approvals ({awaiting_count} cases)..."
-        )
-        print(f"  Waiting {ESCALATION_WAIT}s for tickets to be created...")
-        time.sleep(ESCALATION_WAIT)
-        phase_start = time.time()
-        approved = simulate_ticket_approvals(
-            cases, case_results, config["api_url"], args.region
-        )
-        if approved:
-            print(
-                f"\n  [{_ts()}] Waiting for {len(approved)} re-processed cases "
-                f"(max {args.max_wait // 2}s)..."
-            )
-            approved_cases = [c for c in cases if c.get("po_number") in approved]
-            updated = poll_completion(
-                approved_cases, config["cases_table"], args.region, args.max_wait // 2
-            )
-            case_results.update(updated)
-            re_completed = sum(
-                1 for v in updated.values() if v.get("status") not in PENDING_STATUSES
-            )
-            print(
-                f"  [{_ts()}] Phase 4 complete: {re_completed}/{len(approved)} "
-                f"re-processed in {_elapsed(phase_start)}"
-            )
-        else:
-            print(f"  [{_ts()}] No tickets approved — skipping re-processing wait")
-    else:
-        print(f"\n[{_ts()}] Phase 4: No cases awaiting approval, skipping")
-
-    # Phase 5: Re-read final state (cost_summary is written after status change)
     print(
-        f"\n[{_ts()}] Phase 5: Final data collection (15s delay for trace persistence)..."
+        f"  [{_ts()}] Phase 3 complete: {reached}/{len(case_results)} reached "
+        f"a terminal or review state in {_elapsed(phase_start)}"
+    )
+
+    print(f"\n[{_ts()}] Phase 4: Driving human ticket responses...")
+    phase_start = time.time()
+    case_results, lifecycle, lifecycle_errors = drive_ticket_lifecycle(
+        cases,
+        case_results,
+        config["cases_table"],
+        config["tickets_table"],
+        config["ticket_action_function"],
+        args.region,
+        max(60, args.max_wait // 2),
+    )
+    print(f"  [{_ts()}] Phase 4 complete in {_elapsed(phase_start)}")
+
+    validation_errors = [
+        *initial_errors,
+        *lifecycle_errors,
+        *[
+            f"{case['id']}: SAP fixture was not created"
+            for case in cases
+            if not case.get("po_number")
+        ],
+    ]
+
+    print(
+        f"\n[{_ts()}] Phase 5: Final data collection "
+        "(15s delay for trace persistence)..."
     )
     time.sleep(15)
     table = boto3.resource("dynamodb", region_name=args.region).Table(
         config["cases_table"]
     )
+    active_cases = []
     for case in cases:
         po = case.get("po_number")
         if not po:
             continue
-        resp = table.get_item(Key={"document_number": po, "item_id": "10"})
-        if resp.get("Item"):
-            case_results[po] = resp["Item"]
+        item = table.get_item(Key={"case_id": f"{po}-10"}, ConsistentRead=True).get(
+            "Item"
+        )
+        if item:
+            case_results[po] = item
+            if item.get("status") in ACTIVE_STATUSES:
+                active_cases.append(case)
 
+    if active_cases:
+        print(
+            f"  [{_ts()}] Waiting for {len(active_cases)} active final "
+            "invocation(s) to stabilize..."
+        )
+        stabilized, stabilization_errors = poll_case_states(
+            active_cases,
+            config["cases_table"],
+            args.region,
+            max(60, min(300, args.max_wait)),
+            TERMINAL_STATUSES,
+        )
+        case_results.update(stabilized)
+        validation_errors.extend(stabilization_errors)
+
+    final_lifecycle_errors = validate_final_lifecycle(cases, case_results, lifecycle)
+    validation_errors.extend(final_lifecycle_errors)
+    validation_errors = list(dict.fromkeys(validation_errors))
     print(f"\n[{_ts()}] Phase 6: Generating report...")
-    generate_report(cases, case_results)
-    print(f"\n[{_ts()}] Benchmark complete — total runtime {_elapsed(run_start)}")
+    report = generate_report(cases, case_results, lifecycle, validation_errors)
+    print(f"\n[{_ts()}] Benchmark finished — total runtime {_elapsed(run_start)}")
+    if not report["summary"]["valid"]:
+        print("ERROR: Benchmark lifecycle validation failed")
+        sys.exit(1)
 
 
 if __name__ == "__main__":

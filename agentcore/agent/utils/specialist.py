@@ -17,6 +17,8 @@ from strands import Agent
 from strands.models import BedrockModel
 from strands.models.bedrock import CacheConfig
 
+from .model_config import sampling_kwargs
+
 SPECIALIST_PROMPT = """\
 You are a reasoning specialist for SAP financial exception processing.
 You receive focused interpretation tasks from an orchestrator agent.
@@ -57,17 +59,16 @@ def _guardrail_kwargs() -> dict:
 
 def create_specialist(model_id: str | None = None) -> Agent:
     """Create the reasoning specialist agent (Sonnet, no tools)."""
-    default_id = os.environ.get(
-        "MODEL_ID", "us.anthropic.claude-sonnet-4-5-20250929-v1:0"
-    )
+    default_id = os.environ.get("MODEL_ID", "us.anthropic.claude-sonnet-5")
+    resolved_id = model_id or default_id
 
     return Agent(
         name="ReasoningSpecialist",
         system_prompt=SPECIALIST_PROMPT,
         model=BedrockModel(
-            model_id=model_id or default_id,
-            temperature=0.2,
+            model_id=resolved_id,
             cache_config=CacheConfig(strategy="auto"),
+            **sampling_kwargs(resolved_id, 0.2),
             **_guardrail_kwargs(),
         ),
         tools=[],

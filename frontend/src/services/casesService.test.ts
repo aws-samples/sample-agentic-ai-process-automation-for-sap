@@ -9,6 +9,7 @@ import {
   submitCaseRating,
   saveAgentTrace,
 } from "@/services/casesService"
+import { Domain } from "@/types/cases"
 
 vi.mock("@/lib/config", () => ({
   getConfig: vi.fn().mockResolvedValue({
@@ -45,10 +46,10 @@ describe("casesService", () => {
     const fetchMock = okJson([{ id: 1 }])
     vi.stubGlobal("fetch", fetchMock)
 
-    const result = await fetchCases({ status: "open" as never, domain: "all" as never }, "tok")
+    const result = await fetchCases({ status: "open" as never, domain: Domain.FinanceAp }, "tok")
 
     const [url, opts] = fetchMock.mock.calls[0]
-    expect(url).toBe("https://api.test/cases?status=open") // domain "all" omitted
+    expect(url).toBe("https://api.test/cases?status=open&domain=finance_ap")
     expect(opts.headers.Authorization).toBe("Bearer tok")
     expect(result).toEqual([{ id: 1 }])
   })
@@ -58,11 +59,11 @@ describe("casesService", () => {
     await expect(fetchCases({}, "tok")).rejects.toThrow(/Failed to fetch cases: 500/)
   })
 
-  it("fetchCase hits the document/item path", async () => {
+  it("fetchCase hits the case_id path", async () => {
     const fetchMock = okJson({ id: "x" })
     vi.stubGlobal("fetch", fetchMock)
-    await fetchCase("DOC1", "ITEM1", "tok")
-    expect(fetchMock.mock.calls[0][0]).toBe("https://api.test/cases/DOC1/ITEM1")
+    await fetchCase("DOC1-ITEM1", "tok")
+    expect(fetchMock.mock.calls[0][0]).toBe("https://api.test/cases/DOC1-ITEM1")
   })
 
   it("enqueueCases POSTs one request per id with case_id body", async () => {
@@ -84,9 +85,9 @@ describe("casesService", () => {
   it("submitCaseRating PUTs rating and comment", async () => {
     const fetchMock = okJson({})
     vi.stubGlobal("fetch", fetchMock)
-    await submitCaseRating("DOC1", "ITEM1", "positive", "nice", "tok")
+    await submitCaseRating("DOC1-ITEM1", "positive", "nice", "tok")
     const [url, opts] = fetchMock.mock.calls[0]
-    expect(url).toBe("https://api.test/cases/DOC1/ITEM1/rating")
+    expect(url).toBe("https://api.test/cases/DOC1-ITEM1/rating")
     expect(opts.method).toBe("PUT")
     expect(JSON.parse(opts.body)).toEqual({ rating: "positive", comment: "nice" })
   })
@@ -95,15 +96,15 @@ describe("casesService", () => {
     const fetchMock = okJson({})
     vi.stubGlobal("fetch", fetchMock)
     const trace = { trace_id: "t1", segments: [] } as never
-    await saveAgentTrace("DOC1", "ITEM1", trace, "tok")
+    await saveAgentTrace("DOC1-ITEM1", trace, "tok")
     const [url, opts] = fetchMock.mock.calls[0]
-    expect(url).toBe("https://api.test/cases/DOC1/ITEM1/traces")
+    expect(url).toBe("https://api.test/cases/DOC1-ITEM1/traces")
     expect(opts.method).toBe("POST")
   })
 
   it("saveAgentTrace throws on non-ok", async () => {
     vi.stubGlobal("fetch", errResponse(500))
-    await expect(saveAgentTrace("DOC1", "ITEM1", {} as never, "tok")).rejects.toThrow(
+    await expect(saveAgentTrace("DOC1-ITEM1", {} as never, "tok")).rejects.toThrow(
       /Failed to save trace: 500/
     )
   })

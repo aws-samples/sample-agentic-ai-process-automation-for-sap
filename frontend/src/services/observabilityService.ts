@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { getConfig } from "@/lib/config"
+import { apiFetch } from "@/lib/apiFetch"
 import type { TraceSegment } from "@/types/generated-cases"
 
 export interface MetricPoint {
@@ -74,21 +75,16 @@ export interface RecentError {
 
 export async function fetchMetrics(token: string, hours = 24, period = 3600): Promise<MetricsData> {
   const { apiUrl } = await getConfig()
-  const res = await fetch(
+  return apiFetch(
     `${apiUrl}/observability/metrics?hours=${hours}&period=${period}&by_model=true`,
-    { headers: { Authorization: `Bearer ${token}` } }
+    { token },
+    "Metrics fetch failed"
   )
-  if (!res.ok) throw new Error(`Metrics fetch failed: ${res.status}`)
-  return res.json()
 }
 
 export async function fetchHealth(token: string): Promise<HealthData> {
   const { apiUrl } = await getConfig()
-  const res = await fetch(`${apiUrl}/observability/health`, {
-    headers: { Authorization: `Bearer ${token}` },
-  })
-  if (!res.ok) throw new Error(`Health fetch failed: ${res.status}`)
-  return res.json()
+  return apiFetch(`${apiUrl}/observability/health`, { token }, "Health fetch failed")
 }
 
 export interface TraceRecord {
@@ -112,9 +108,5 @@ export interface TracesData {
 export async function fetchTraces(token: string, hours?: number): Promise<TracesData> {
   const { apiUrl } = await getConfig()
   const params = hours !== undefined ? `?hours=${hours}` : ""
-  const res = await fetch(`${apiUrl}/observability/traces${params}`, {
-    headers: { Authorization: `Bearer ${token}` },
-  })
-  if (!res.ok) throw new Error(`Traces fetch failed: ${res.status}`)
-  return res.json()
+  return apiFetch(`${apiUrl}/observability/traces${params}`, { token }, "Traces fetch failed")
 }

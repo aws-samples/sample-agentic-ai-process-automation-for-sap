@@ -32,6 +32,7 @@ dependencies = [
     "requests>=2.31.0",
     "PyYAML>=6.0.1",
     "colorama>=0.4.6",
+    "questionary>=2.0.0",
 ]
 
 [project.optional-dependencies]
@@ -40,15 +41,24 @@ dev = ["pytest>=7.0.0", "ruff>=0.1.0", "mypy>=1.0.0"]
 
 # Strands agent dependencies (for local development).
 # MUST stay in sync with agentcore/agent/requirements.txt — that file is the
-# source of truth the container/prod builds from. basic_agent.py imports
-# CacheConfig (strands 1.24+) and strands_tools, so stale pins here break a
-# local `pip install -e .[agent-strands]`.
+# source of truth the container/prod builds from, and tests/unit/
+# test_agent_requirements_parity.py fails when the two drift. basic_agent.py
+# imports the AG-UI adapter and serves over FastAPI, so those belong here too:
+# without them `pip install -e .[agent-strands]` yields an environment that
+# cannot import basic_agent at all.
 agent-strands = [
-    "strands-agents==1.24.0",
-    "strands-agents-tools>=0.2.20",
-    "mcp==1.26.0",
-    "bedrock-agentcore[strands-agents]==1.2.0",
+    "strands-agents==1.50.2",
+    "strands-agents-tools>=0.8.5",
+    "mcp==1.29.0",
+    "bedrock-agentcore[strands-agents]==1.19.0",
+    # The container is 3.13; this wheel declares >=3.12,<3.14, so it needs a marker
+    # to stay resolvable under the project's 3.10+ floor (the launcher's requirement).
+    "ag-ui-strands==0.2.3; python_version >= '3.12' and python_version < '3.14'",
+    "ag-ui-protocol==0.1.19",
+    "fastapi==0.141.1",
+    "uvicorn==0.52.1",
     "PyJWT[crypto]>=2.10.1",
+    "PyYAML>=6.0",
     "httptools>=0.6.0",
 ]
 

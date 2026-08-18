@@ -5,8 +5,8 @@
 # Sets up SES domain identity with DKIM + MX for inbound email.
 #
 # Usage:
-#   ./scripts/setup-ses-domain.sh <domain>
-#   ./scripts/setup-ses-domain.sh myname.people.aws.dev
+#   ./scripts/ops/setup-ses-domain.sh <domain>
+#   ./scripts/ops/setup-ses-domain.sh example.com
 #
 # Prerequisites:
 #   - AWS CLI configured with credentials
@@ -27,10 +27,10 @@ fail()    { echo -e "${RED}✗${NC}  $1"; exit 1; }
 DOMAIN="${1:-}"
 if [[ -z "$DOMAIN" ]]; then
   echo "Usage: $0 <domain>"
-  echo "Example: $0 myname.people.aws.dev"
+  echo "Example: $0 mail.example.com"
   echo ""
   echo "Prerequisites:"
-  echo "  1. Register your domain first — see docs/Registering-Domain.md"
+  echo "  1. Register the domain and create a Route 53 hosted zone for it"
   echo "  2. Verify DNS is live: dig <domain> NS +short (should return 4 nameservers)"
   echo "  3. Have AWS CLI configured with credentials for the account hosting the domain"
   exit 1

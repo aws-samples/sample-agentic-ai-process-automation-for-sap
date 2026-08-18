@@ -2,46 +2,55 @@
 // SPDX-License-Identifier: Apache-2.0
 
 // Re-export generated types (source of truth: types/cases.schema.json)
-export { CaseStatus, Domain, Priority, Trigger, Type as TraceSegmentType } from "./generated-cases"
-export type { WorkItem, AgentTrace, TraceSegment } from "./generated-cases"
+// Status/Mode/Outcome are renamed: unqualified, they read as case-level state
+// beside CaseStatus, and they are neither.
+export {
+  CaseStatus,
+  Domain,
+  EvidenceKind,
+  Mode as AuthzMode,
+  Outcome as AuthzOutcome,
+  Priority,
+  Status as SegmentStatus,
+  Trigger,
+  Type as TraceSegmentType,
+  Type,
+  WriteOp,
+} from "./generated-cases"
+export type {
+  AgentTrace,
+  Evidence,
+  EvidenceAuthz,
+  EvidenceField,
+  EvidenceSource,
+  ProposedField,
+  ProposedWrite,
+  TraceSegment,
+  WorkItem,
+} from "./generated-cases"
 
 import { CaseStatus, Domain } from "./generated-cases"
+import type { StatusTone } from "@/lib/statusTone"
 
 // UI-only display metadata — not part of the schema
 export const CASE_STATUSES = Object.values(CaseStatus)
 
-// `color` styles the pill (bg + text); `dot` is the leading status dot color.
-export const STATUS_META: Record<CaseStatus, { label: string; color: string; dot: string }> = {
-  [CaseStatus.Detected]: {
-    label: "Detected",
-    color: "bg-blue-50 text-blue-700",
-    dot: "bg-blue-500",
-  },
-  [CaseStatus.Processing]: {
-    label: "Processing",
-    color: "bg-amber-50 text-amber-700",
-    dot: "bg-amber-500",
-  },
-  [CaseStatus.AwaitingHumanInput]: {
-    label: "Awaiting Input",
-    color: "bg-orange-50 text-orange-700",
-    dot: "bg-orange-500",
-  },
-  [CaseStatus.SapUpdated]: {
-    label: "SAP Updated",
-    color: "bg-green-50 text-green-700",
-    dot: "bg-green-500",
-  },
-  [CaseStatus.Complete]: {
-    label: "Complete",
-    color: "bg-emerald-50 text-emerald-700",
-    dot: "bg-emerald-500",
-  },
-  [CaseStatus.ManualReviewRequired]: {
-    label: "Manual Review",
-    color: "bg-red-50 text-red-700",
-    dot: "bg-red-500",
-  },
+// `tone` selects the shared state colour — see lib/statusTone.ts.
+export const STATUS_META: Record<CaseStatus, { label: string; tone: StatusTone }> = {
+  [CaseStatus.Detected]: { label: "Detected", tone: "info" },
+  [CaseStatus.Processing]: { label: "Processing", tone: "progress" },
+  [CaseStatus.AwaitingHumanInput]: { label: "Awaiting Input", tone: "attention" },
+  // Written to SAP but not yet closed out, so it shares the "finished well"
+  // tone with Complete and is distinguished by its label.
+  [CaseStatus.SapUpdated]: { label: "SAP Updated", tone: "success" },
+  [CaseStatus.Complete]: { label: "Complete", tone: "success" },
+  [CaseStatus.ManualReviewRequired]: { label: "Manual Review", tone: "danger" },
+  [CaseStatus.Error]: { label: "Error", tone: "danger" },
+}
+
+/** Display metadata for a case status, tolerating unknown values from older records. */
+export function caseStatusMeta(status: CaseStatus | string): { label: string; tone: StatusTone } {
+  return STATUS_META[status as CaseStatus] ?? STATUS_META[CaseStatus.Detected]
 }
 
 export const DOMAIN_META: Record<Domain, { label: string; short: string }> = {

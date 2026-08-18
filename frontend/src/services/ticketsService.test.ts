@@ -77,16 +77,19 @@ describe("ticketsService", () => {
     vi.stubGlobal("fetch", fetchMock)
     await submitTicketAction("T1", "replied", "see notes", "tok", "extra")
     const body = JSON.parse(fetchMock.mock.calls[0][1].body)
-    expect(body.comment).toBe("Reply: see notes")
+    expect(body.comment).toBe("see notes")
     expect(body.response_text).toBe("extra")
   })
 
-  it("submitTicketAction builds default comment for approved and omits response_text", async () => {
+  it("submitTicketAction sends the reviewer's own words as the comment on approval", async () => {
+    // The reviewer's reason reaches both the comment list and the resumed agent —
+    // `resolution` is what the SQS payload carries, so a canned comment would diverge.
     const fetchMock = okJson({ ticket: {}, enqueued: false, case_id: "c1" })
     vi.stubGlobal("fetch", fetchMock)
-    await submitTicketAction("T1", "approved", "ok", "tok")
+    await submitTicketAction("T1", "approved", "Within the 5% tolerance", "tok")
     const body = JSON.parse(fetchMock.mock.calls[0][1].body)
-    expect(body.comment).toBe("Ticket approved by user")
+    expect(body.comment).toBe("Within the 5% tolerance")
+    expect(body.resolution).toBe("Within the 5% tolerance")
     expect("response_text" in body).toBe(false)
   })
 

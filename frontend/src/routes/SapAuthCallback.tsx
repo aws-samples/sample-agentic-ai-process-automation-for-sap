@@ -1,13 +1,12 @@
 // Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
-"use client"
-
 import { useEffect } from "react"
-import { Link, useSearchParams } from "react-router-dom"
+import { Link, useSearchParams } from "react-router"
 import { CheckCircle2, AlertTriangle } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
+import { TONE_TEXT } from "@/lib/statusTone"
 
 /**
  * Landing page for the SAP USER_FEDERATION (OBO) browser redirect.
@@ -41,20 +40,24 @@ export default function SapAuthCallback() {
       <Card className="max-w-md w-full p-6 text-center space-y-4">
         {error ? (
           <>
-            <AlertTriangle size={40} className="text-red-500 mx-auto" />
-            <h1 className="text-lg font-semibold text-gray-900">SAP sign-in failed</h1>
-            <p className="text-sm text-gray-600">
+            <AlertTriangle size={40} className={`mx-auto ${TONE_TEXT.danger}`} />
+            <h1 className="font-display text-lg font-semibold tracking-tight text-foreground">
+              SAP sign-in failed
+            </h1>
+            <p className="text-sm text-muted-foreground">
               {errorDescription || error || "An error occurred during SAP authentication."}
             </p>
-            <p className="text-sm text-gray-500">
+            <p className="text-sm text-muted-foreground">
               Return to your conversation and try your request again to restart sign-in.
             </p>
           </>
         ) : (
           <>
-            <CheckCircle2 size={40} className="text-green-500 mx-auto" />
-            <h1 className="text-lg font-semibold text-gray-900">SAP sign-in complete</h1>
-            <p className="text-sm text-gray-600">
+            <CheckCircle2 size={40} className={`mx-auto ${TONE_TEXT.success}`} />
+            <h1 className="font-display text-lg font-semibold tracking-tight text-foreground">
+              SAP sign-in complete
+            </h1>
+            <p className="text-sm text-muted-foreground">
               You can return to your conversation and retry your request.
             </p>
           </>

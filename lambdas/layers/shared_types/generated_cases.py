@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from enum import Enum, StrEnum
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, constr
 
 
 class UserRating(Enum):
@@ -37,12 +37,28 @@ class Priority(StrEnum):
 
 
 class CaseStatus(StrEnum):
+    """
+    `error` is terminal-until-retried: the SOPs and skill prompts instruct the agent to write it when a tool call fails irrecoverably, so it must be a first-class state rather than a value the UI silently renders as 'Detected'.
+    """
+
     detected = "detected"
     processing = "processing"
     awaiting_human_input = "awaiting_human_input"
     sap_updated = "sap_updated"
     complete = "complete"
     manual_review_required = "manual_review_required"
+    error = "error"
+
+
+class ActionLogEntry(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    action: str = Field(
+        ...,
+        description="Action name the caller supplied, e.g. sap_updated, invoice_released.",
+    )
+    timestamp: str
 
 
 class Trigger(StrEnum):
@@ -52,16 +68,176 @@ class Trigger(StrEnum):
 
     poller = "poller"
     webhook_ses = "webhook-ses"
-    webhook_slack = "webhook-slack"
     webhook_jira = "webhook-jira"
     webhook_servicenow = "webhook-servicenow"
     ticket_action = "ticket-action"
     manual = "manual"
+    batch = "batch"
 
 
 class Type(StrEnum):
     text = "text"
     tool = "tool"
+
+
+class Status(StrEnum):
+    """
+    ToolResult.status as reported by the SDK. On the segment rather than inside evidence because it is SDK-native, not derived.
+    """
+
+    success = "success"
+    error = "error"
+
+
+class Citation(BaseModel):
+    """
+    A quoted SOP sentence and whether it is present in the text the run was given. Absent when the agent quoted nothing gradeable — which is a different state from quoting something absent.
+    """
+
+    quote: str = Field(
+        ..., description="The span as the agent wrote it, before normalization."
+    )
+    verified: bool = Field(
+        ...,
+        description="False means the span is not in what the agent was shown. It is NOT on its own proof the SOP was violated — a compliant agent that paraphrases lands here too, so the render must never present it as one.",
+    )
+
+
+class ProposedField(BaseModel):
+    name: str
+    current: str | None = Field(
+        None,
+        description="Absent on a create, and absent whenever the agent did not read the value in this run.",
+    )
+    proposed: str
+
+
+class EvidenceKind(StrEnum):
+    """
+    Drives the timeline's row rendering, so the UI never pattern-matches tool names.
+    """
+
+    sap_read = "sap_read"
+    sap_write = "sap_write"
+    sop_lookup = "sop_lookup"
+    case_update = "case_update"
+    notification = "notification"
+    computation = "computation"
+
+
+class WriteOp(StrEnum):
+    update = "update"
+    create = "create"
+    function_import = "function_import"
+
+
+class EvidenceSource(BaseModel):
+    """
+    Where a value came from in SAP.
+    """
+
+    service: str | None = None
+    entity: str | None = None
+    key: str | None = None
+
+
+class EvidenceField(BaseModel):
+    name: str
+    value: str | None = None
+
+
+class Mode(StrEnum):
+    """
+    Whether a denial would have blocked.
+    """
+
+    LOG_ONLY = "LOG_ONLY"
+    ENFORCE = "ENFORCE"
+
+
+class Outcome(StrEnum):
+    """
+    Absent when a call failed for a non-authorization reason.
+    """
+
+    permitted = "permitted"
+    rejected = "rejected"
+
+
+class EvidenceAuthz(BaseModel):
+    """
+    The three authorization facts that are actually available. The matched Cedar policy id is not obtainable from the Gateway.
+    """
+
+    mode: Mode | None = Field(None, description="Whether a denial would have blocked.")
+    via_gateway: bool | None = Field(
+        None, description="The call traversed policy evaluation."
+    )
+    outcome: Outcome | None = Field(
+        None, description="Absent when a call failed for a non-authorization reason."
+    )
+
+
+class CostSummary(BaseModel):
+    """
+    Per-case accumulated agent cost and token counts, summed across every invocation.
+    """
+
+    total_cost_usd: float | None = None
+    total_input_tokens: int | None = None
+    total_output_tokens: int | None = None
+    total_cache_read_tokens: int | None = None
+    invocation_count: int | None = None
+
+
+class ProposedWrite(BaseModel):
+    """
+    A write declared as structured intent at escalation time, so an approval can render as a diff instead of prose.
+    """
+
+    op: WriteOp = Field(
+        ...,
+        description="Shares the record half's discriminator — a proposal and a record describe the same three write shapes.",
+    )
+    service: str | None = None
+    entity: str | None = None
+    key: str | None = None
+    fields: list[ProposedField]
+
+
+class Evidence(BaseModel):
+    """
+    Deterministic provenance for one tool call. Only `kind` is required — an unknown tool falls through to `computation` with no source rather than failing.
+    """
+
+    kind: EvidenceKind
+    at: str | None = Field(None, description="ISO timestamp of the tool call.")
+    op: WriteOp | None = Field(
+        None,
+        description="sap_write only — the three write shapes do not render as the same kind of diff.",
+    )
+    source: EvidenceSource | None = None
+    fields: list[EvidenceField] | None = Field(
+        None,
+        description="Field values read or written. The timeline renders these, never model prose.",
+    )
+    authz: EvidenceAuthz | None = None
+    clauses_retrieved: list[str] | None = Field(
+        None,
+        description="sop_lookup only — numbered clauses found in the retrieved SOP text. A human locator, not a verification key: most SOPs carry no numbers, so `citation` is what grades.",
+    )
+    citation: Citation | None = Field(
+        None,
+        description="notification and case_update only — the SOP sentence the agent quoted, checked against the text this run was given.",
+    )
+    truncated: bool | None = Field(
+        None,
+        description="True when the tool_input or tool_result preview hit its size budget.",
+    )
+    proposed_write: ProposedWrite | None = Field(
+        None,
+        description="notification only — the write the agent is asking permission to make. The one model-supplied key in an otherwise deterministic model, so its `current` values are verified client-side against the run's reads rather than trusted.",
+    )
 
 
 class TraceSegment(BaseModel):
@@ -70,6 +246,18 @@ class TraceSegment(BaseModel):
     tool_name: str | None = None
     tool_input: str | None = None
     tool_result: str | None = None
+    tool_call_id: str | None = Field(
+        None,
+        description="SDK toolUseId. Joins a stream-folded segment to the evidence the AfterToolCallEvent hook extracted.",
+    )
+    status: Status | None = Field(
+        None,
+        description="ToolResult.status as reported by the SDK. On the segment rather than inside evidence because it is SDK-native, not derived.",
+    )
+    evidence: Evidence | None = Field(
+        None,
+        description="Structured provenance for this tool step. Absent on any trace stored before the T.1 migration.",
+    )
 
 
 class AgentTrace(BaseModel):
@@ -84,6 +272,14 @@ class AgentTrace(BaseModel):
         None,
         description="Invocation result: complete, stopped, cancelled, error, disconnected.",
     )
+    sop_version: str | None = Field(
+        None,
+        description="Version the injected SOP declared in its own header, read at resolve_skill time. Names the authority this run actually followed, which a precedent row citing the case must reproduce even after the SOP is revised.",
+    )
+    clauses_available: list[str] | None = Field(
+        None,
+        description="DEPRECATED — no longer produced. Was the clause-number baseline a `per §N.N` citation was graded against, which passed a fabricated rule wearing a real number; `Evidence.citation` grades the quoted span instead. The key stays declared because AgentTrace forbids extra keys, so removing it would make every already-persisted trace fail validation.",
+    )
     segments: list[TraceSegment]
 
 
@@ -95,11 +291,17 @@ class WorkItem(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
+    case_id: constr(pattern=r"^[A-Za-z0-9_]+-[A-Za-z0-9_]+$") = Field(
+        ...,
+        description="Canonical case identity and the table's sole partition key: {document_number}-{item_id}. Also the form used off-table — SQS bodies and MessageGroupId, ticket correlation, prompts, URLs, session ids. Built and parsed only via the case_key codec (lambdas/layers/shared_types/case_key.py, frontend/src/lib/caseKey.ts).",
+    )
     document_number: str = Field(
-        ..., description="SAP document number (e.g. supplier invoice). Partition key."
+        ...,
+        description="SAP document number (e.g. supplier invoice). An attribute, not identity — SAP calls and display need it.",
     )
     item_id: str = Field(
-        ..., description="Item identifier within the document. Sort key."
+        ...,
+        description="Item identifier within the document. An attribute, not identity.",
     )
     domain: Domain = Field(..., description="Skill domain this item belongs to.")
     process_type: str = Field(
@@ -129,11 +331,22 @@ class WorkItem(BaseModel):
     invoice_quantity: float | None = Field(
         None, description="AP: Invoiced quantity in PO unit."
     )
+    ticket_id: str | None = Field(
+        None,
+        description="Related demo ticket ID while the case awaits a supervised response.",
+    )
     inquiry_sent_at: str | None = Field(
         None,
-        description="ISO timestamp of an outbound inquiry, if the workflow sent one.",
+        description="ISO timestamp of the outbound inquiry that put the case into awaiting_human_input. Server-owned: stamped by case_management_lambda on entry to that status and cleared on leaving it, never taken from model-authored updates — it is what lets the handover claim 'waiting 6d' rather than 'last activity 6d'.",
     )
-    ttl: int | None = None
+    action_log: list[ActionLogEntry] | None = Field(
+        None,
+        description="Append-only audit trail, one entry per update_case_state call. Written by case_management_lambda on every update.",
+    )
+    ttl: int | None = Field(
+        None,
+        description="DynamoDB TTL (epoch seconds). Only set by the eval regression harness on seeded synthetic cases (7-day expiry) so they self-clean; real cases never carry this.",
+    )
     user_rating: UserRating | None = Field(
         None, description="Case-level resolution quality rating from a human reviewer."
     )
@@ -145,4 +358,12 @@ class WorkItem(BaseModel):
     )
     agent_traces: list[AgentTrace] | None = Field(
         None, description="Historical agent thought-process traces, one per invocation."
+    )
+    cost_summary: CostSummary | None = Field(
+        None,
+        description="Per-case accumulated agent cost. Written by basic_agent._save_trace_to_ddb.",
+    )
+    traces_dropped: int | None = Field(
+        None,
+        description="Count of oldest traces evicted by the per-case trace cap, so the UI can state that history was thinned rather than thinning it silently.",
     )

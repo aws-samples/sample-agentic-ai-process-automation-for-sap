@@ -45,7 +45,7 @@ values and stores its ARN in SSM at `/{stack_name_base}/secrets/sap-credentials-
 ## 3. Sync Service-Account Credentials
 
 ```bash
-./scripts/sync-sap-secret.sh
+python3 launch.py sync-sap
 ```
 
 Reads `sap.base_url` from `config.yaml` and prompts for username/password. The secret stores three

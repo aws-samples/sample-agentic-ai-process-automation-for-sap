@@ -125,6 +125,10 @@ resource "aws_lambda_function" "agent_invoker" {
   filename         = data.archive_file.agent_invoker.output_path
   source_code_hash = data.archive_file.agent_invoker.output_base64sha256
 
+  # Needed for the case_key codec — every status write derives the DynamoDB key
+  # from the message's case_id.
+  layers = [aws_lambda_layer_version.shared_types.arn]
+
   environment {
     variables = {
       CASES_TABLE     = aws_dynamodb_table.cases.name

@@ -49,20 +49,26 @@ agent/
 
 ## Model
 
-- **Agent**: `us.anthropic.claude-sonnet-4-5-20250929-v1:0` (Sonnet via Bedrock)
+- **Agent**: `us.anthropic.claude-sonnet-5` (Sonnet via Bedrock)
 
 ## Streaming Events
 
-The agent yields SSE `data: {json}` lines via `agent.stream_async()`. The frontend parser at `frontend/src/lib/agentcore-client/parsers/strands.ts` handles these event types:
+The agent emits canonical **AG-UI** events; the Runtime is configured with
+`ProtocolConfiguration: AGUI`. `ag_ui_strands.StrandsAgent` adapts the Strands agent, so
+events are produced by the adapter rather than hand-serialized. The frontend folds them
+into chat state with the pure reducer at `frontend/src/lib/aguiReducer.ts`.
 
-| Event | Format | Description |
-|-------|--------|-------------|
-| Text | `{"data": "text"}` | Token-level text content |
-| Tool use start | `{"current_tool_use": {...}, "delta": {"toolUse": {"input": ""}}}` | Tool invocation begins |
-| Tool use delta | `{"current_tool_use": {...}, "delta": {"toolUse": {"input": "..."}}}` | Streaming tool input |
-| Tool result | `{"message": {"role": "user", "content": [{"toolResult": {...}}]}}` | Tool execution result |
-| Result | `{"result": {"stop_reason": "end_turn"}}` | Agent finished |
-| Lifecycle | `{"init_event_loop": true}` / `{"start_event_loop": true}` | Agent lifecycle events |
+| Event | Description |
+|-------|-------------|
+| `RUN_STARTED` | Run accepted and begun |
+| `TEXT_MESSAGE_START` / `TEXT_MESSAGE_CONTENT` | Assistant message and token-level deltas |
+| `TOOL_CALL_START` / `TOOL_CALL_ARGS` / `TOOL_CALL_END` | Tool invocation and streaming input |
+| `TOOL_CALL_RESULT` | Tool execution result |
+| `MESSAGES_SNAPSHOT` / `STATE_SNAPSHOT` | Full message or state replacement |
+| `RUN_FINISHED` / `RUN_ERROR` | Terminal outcome. A deliberate stop, such as the turn limit, arrives as `RUN_ERROR` with a code |
+
+See `docs/agent/STREAMING.md` for the full contract, the autonomous path, and the
+interrupt/resume gap.
 
 ## Memory Integration
 
@@ -95,9 +101,13 @@ Both ZIP (default, no Docker needed) and Docker deployment types are supported.
 
 ## Dependencies
 
+`requirements.txt` is authoritative — it is what the Dockerfile installs. The
+headline pins:
+
 ```
-strands-agents==1.24.0
-mcp==1.26.0
-bedrock-agentcore[strands-agents]==1.2.0
+strands-agents==1.50.2
+mcp==1.29.0
+bedrock-agentcore[strands-agents]==1.19.0
+ag-ui-strands==0.2.3
 PyJWT[crypto]>=2.10.1
 ```

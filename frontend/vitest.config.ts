@@ -11,6 +11,9 @@ export default defineConfig({
     globals: true,
     environment: "jsdom",
     setupFiles: "./src/test/setup.ts",
+    // Timestamps render through `toLocaleDateString`, so a runner west of UTC-9 would
+    // read a fixture's date as the day before and fail an assertion on the label.
+    env: { TZ: "UTC" },
   },
   resolve: {
     alias: {

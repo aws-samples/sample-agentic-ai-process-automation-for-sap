@@ -85,20 +85,35 @@ export function resolveOutboundProfile(opts?: { artifactPath?: string }): Outbou
 
 export interface ModeProfileResult {
   batchRunnerEnabled: boolean
-  modes: string[]
+  /** Resolved mode list, or null when the artifact declares nothing about the mode
+   *  axis. null means UNKNOWN — never "autonomous is forbidden". run_emit omits the
+   *  block when the axis is inert (autonomous declared, nothing to provision), and
+   *  writes no artifact at all for the all-no-op cognito-basic profile, so reading an
+   *  empty list as "autonomous not declared" would refuse the autonomous path on the
+   *  default deployment. Gate on `modes !== null && !modes.includes(...)`. */
+  modes: string[] | null
+  /** Profile name from the artifact, for naming the offender in a synth failure.
+   *  null when no artifact was present. */
+  profile: string | null
 }
 
-/** Read the mode-axis block from the deploy-time artifact. Absent artifact or
- *  absent `mode` block → batch runner disabled (autonomous/live topology). */
+/** Read the mode-axis block from the deploy-time artifact. Absent artifact or absent
+ *  `mode` block → batch runner disabled and the mode list UNKNOWN (null), because
+ *  run_emit only emits the block when the axis provisions or constrains something. */
 export function resolveModeProfile(opts?: { artifactPath?: string }): ModeProfileResult {
   const artifactPath = opts?.artifactPath ?? defaultArtifactPath()
   if (!fs.existsSync(artifactPath)) {
-    return { batchRunnerEnabled: false, modes: [] }
+    return { batchRunnerEnabled: false, modes: null, profile: null }
   }
   const artifact = JSON.parse(fs.readFileSync(artifactPath, "utf-8"))
+  const profile = typeof artifact.profile === "string" ? artifact.profile : null
   const m = artifact.mode
   if (!m) {
-    return { batchRunnerEnabled: false, modes: [] }
+    return { batchRunnerEnabled: false, modes: null, profile }
   }
-  return { batchRunnerEnabled: m.batch_runner_enabled === true, modes: m.modes ?? [] }
+  return {
+    batchRunnerEnabled: m.batch_runner_enabled === true,
+    modes: Array.isArray(m.modes) ? m.modes : null,
+    profile,
+  }
 }

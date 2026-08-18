@@ -46,6 +46,7 @@ nav:
   - Evaluations:
     - Quick Start: evaluations/EVALUATIONS_QUICKSTART.md
     - Cost Benchmark: evaluations/COST_BENCHMARK.md
+    - August 2026 Cost Analysis: evaluations/AP_COST_BENCHMARK_2026_08.md
     - Inference Cost Optimization: evaluations/INFERENCE_COST_OPTIMIZATION.md
     - Full Guide: evaluations/AGENTCORE_EVALUATIONS_GUIDE.md
   - Design Decisions:

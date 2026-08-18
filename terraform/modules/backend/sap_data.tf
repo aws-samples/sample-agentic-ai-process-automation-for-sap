@@ -15,15 +15,16 @@
 resource "aws_dynamodb_table" "cases" {
   name         = "${var.stack_name_base}-cases"
   billing_mode = "PAY_PER_REQUEST"
-  hash_key     = "document_number"
-  range_key    = "item_id"
+
+  # `case_id` ({document_number}-{item_id}, built by the case_key codec) is the sole
+  # partition key: nothing queries the table by document_number, so a composite key
+  # bought only a per-document Query no caller issues. document_number / item_id
+  # remain attributes — needed by SAP calls and the UI, but not identity. Only key
+  # and index attributes are declared here, per DynamoDB's schema rules.
+  hash_key = "case_id"
 
   attribute {
-    name = "document_number"
-    type = "S"
-  }
-  attribute {
-    name = "item_id"
+    name = "case_id"
     type = "S"
   }
   attribute {

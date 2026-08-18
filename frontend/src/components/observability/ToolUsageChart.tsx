@@ -1,8 +1,6 @@
 // Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
-"use client"
-
 import { useState, useMemo } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import type { TraceRecord } from "@/services/observabilityService"
@@ -46,7 +44,9 @@ export default function ToolUsageChart({ traces }: ToolUsageChartProps) {
           <CardTitle className="text-sm">Tool Usage</CardTitle>
         </CardHeader>
         <CardContent className="p-0">
-          <p className="text-xs text-gray-400 text-center py-6">No tool usage data available.</p>
+          <p className="text-xs text-muted-foreground/70 text-center py-6">
+            No tool usage data available.
+          </p>
         </CardContent>
       </Card>
     )
@@ -95,11 +95,10 @@ export default function ToolUsageChart({ traces }: ToolUsageChartProps) {
                     y={y + BAR_HEIGHT / 2 + 1}
                     textAnchor="end"
                     dominantBaseline="middle"
-                    fill={isHovered ? "#111827" : "#6b7280"}
                     fontSize={11}
                     fontFamily="ui-monospace, monospace"
                     fontWeight={isHovered ? 600 : 400}
-                    className="transition-all duration-150"
+                    className={`transition-all duration-150 ${isHovered ? "fill-foreground" : "fill-muted-foreground"}`}
                   >
                     {tool.name.length > 18 ? tool.name.slice(0, 17) + "…" : tool.name}
                   </text>
@@ -111,7 +110,7 @@ export default function ToolUsageChart({ traces }: ToolUsageChartProps) {
                     height={BAR_HEIGHT}
                     rx={BAR_RADIUS}
                     ry={BAR_RADIUS}
-                    fill="#f3f4f6"
+                    className="fill-muted"
                   />
 
                   <rect
@@ -136,11 +135,10 @@ export default function ToolUsageChart({ traces }: ToolUsageChartProps) {
                     y={y + BAR_HEIGHT / 2 + 1}
                     textAnchor="start"
                     dominantBaseline="middle"
-                    fill={isHovered ? "#111827" : "#9ca3af"}
                     fontSize={11}
                     fontFamily="ui-monospace, monospace"
                     fontWeight={isHovered ? 600 : 400}
-                    className="transition-all duration-150"
+                    className={`transition-all duration-150 ${isHovered ? "fill-foreground" : "fill-muted-foreground/70"}`}
                   >
                     {tool.count}
                   </text>
@@ -153,7 +151,7 @@ export default function ToolUsageChart({ traces }: ToolUsageChartProps) {
 
           {hoveredIndex !== null && toolData[hoveredIndex] && (
             <div
-              className="absolute z-50 bg-gray-900 text-white text-[11px] rounded-md shadow-lg px-3 py-2 pointer-events-none whitespace-nowrap"
+              className="absolute z-50 bg-foreground text-background text-2xs rounded-md shadow-lg px-3 py-2 pointer-events-none whitespace-nowrap"
               style={{
                 left: BAR_AREA_LEFT,
                 top: hoveredIndex * (BAR_HEIGHT + BAR_GAP) + BAR_HEIGHT + 8,
@@ -161,7 +159,7 @@ export default function ToolUsageChart({ traces }: ToolUsageChartProps) {
               data-testid="tool-usage-tooltip"
             >
               <span className="font-mono font-semibold">{toolData[hoveredIndex].name}</span>
-              <span className="text-gray-300 mx-1.5">—</span>
+              <span className="text-muted-foreground/60 mx-1.5">—</span>
               <span className="tabular-nums">
                 {toolData[hoveredIndex].count} invocation
                 {toolData[hoveredIndex].count !== 1 ? "s" : ""}

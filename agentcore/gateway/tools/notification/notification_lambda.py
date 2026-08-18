@@ -5,7 +5,7 @@
 Pluggable Notification Gateway Tool Lambda
 
 Dispatches send_notification calls to the configured channel adapter.
-Channel is set via NOTIFICATION_CHANNEL env var (ses/servicenow/jira/slack).
+Channel is set via NOTIFICATION_CHANNEL env var (ses/servicenow/jira).
 Credentials come from Secrets Manager via NOTIFICATION_SECRET env var.
 """
 
@@ -27,8 +27,6 @@ def _get_adapter():
         from adapters import servicenow_adapter as mod
     elif CHANNEL == "jira":
         from adapters import jira_adapter as mod
-    elif CHANNEL == "slack":
-        from adapters import slack_adapter as mod
     elif CHANNEL == "tickets":
         from adapters import tickets_adapter as mod
     else:

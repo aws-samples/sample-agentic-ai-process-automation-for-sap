@@ -21,7 +21,10 @@ export default defineConfig({
     rollupOptions: {
       output: {
         manualChunks: {
-          "react-vendor": ["react", "react-dom", "react-router-dom"],
+          // react-dom/client is listed explicitly: it is the entry main.tsx
+          // actually imports, and naming only "react-dom" left the whole
+          // renderer (~525 kB raw) in the app chunk instead of here.
+          "react-vendor": ["react", "react-dom", "react-dom/client", "react-router"],
           "ui-vendor": [
             "@radix-ui/react-dialog",
             "@radix-ui/react-select",

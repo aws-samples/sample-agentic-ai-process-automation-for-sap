@@ -1,8 +1,6 @@
 // Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
-"use client"
-
 import { useState, useMemo } from "react"
 import {
   ArrowLeft,
@@ -21,6 +19,7 @@ import {
 import { Card, CardContent } from "@/components/ui/card"
 import type { TraceRecord } from "@/services/observabilityService"
 import { filterTracesByCase, computeSessionAggregates, getOutcomeColor } from "./utils/traceUtils"
+import { TONE_TEXT } from "@/lib/statusTone"
 import SpanTimeline from "./SpanTimeline"
 import { useStaggeredEntrance } from "./hooks/useStaggeredEntrance"
 import "./observability-animations.css"
@@ -35,17 +34,19 @@ export interface SessionViewProps {
 
 // ---------------------------------------------------------------------------
 // ---------------------------------------------------------------------------
+// Trigger is categorical (which source fired the run), not a state, so these keep
+// distinct hues with dark variants rather than mapping onto the tone set.
 function TriggerIcon({ trigger }: { trigger: string }) {
   switch (trigger) {
     case "poller":
-      return <Timer size={14} className="text-amber-600" />
+      return <Timer size={14} className="text-amber-600 dark:text-amber-400" />
     case "manual":
-      return <User size={14} className="text-blue-600" />
+      return <User size={14} className="text-blue-600 dark:text-blue-400" />
     case "webhook-ses":
     case "webhook":
-      return <Webhook size={14} className="text-purple-600" />
+      return <Webhook size={14} className="text-purple-600 dark:text-purple-400" />
     default:
-      return <Activity size={14} className="text-gray-500" />
+      return <Activity size={14} className="text-muted-foreground" />
   }
 }
 
@@ -64,16 +65,17 @@ function getTriggerLabel(trigger: string): string {
   }
 }
 
+// Outcome is state, so colour comes from the tone vocabulary.
 function OutcomeIcon({ outcome }: { outcome: string }) {
   switch (outcome) {
     case "complete":
-      return <CheckCircle2 size={14} className="text-green-600" />
+      return <CheckCircle2 size={14} className={TONE_TEXT.success} />
     case "error":
-      return <XCircle size={14} className="text-red-600" />
+      return <XCircle size={14} className={TONE_TEXT.danger} />
     case "cancelled":
-      return <AlertTriangle size={14} className="text-yellow-600" />
+      return <AlertTriangle size={14} className={TONE_TEXT.progress} />
     default:
-      return <AlertTriangle size={14} className="text-gray-400" />
+      return <AlertTriangle size={14} className="text-muted-foreground/70" />
   }
 }
 
@@ -110,17 +112,17 @@ export default function SessionView({ caseId, traces, onClose }: SessionViewProp
       <div className="flex items-center gap-3">
         <button
           onClick={onClose}
-          className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-100 transition-colors"
+          className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
           aria-label="Back to traces"
         >
           <ArrowLeft size={14} />
           Back
         </button>
         <div>
-          <h3 className="text-sm font-semibold text-gray-900">
+          <h3 className="text-sm font-semibold text-foreground">
             Session: <span className="font-mono">{caseId}</span>
           </h3>
-          <p className="text-[11px] text-gray-500">
+          <p className="text-2xs text-muted-foreground">
             All agent invocations for this case in chronological order
           </p>
         </div>
@@ -129,24 +131,30 @@ export default function SessionView({ caseId, traces, onClose }: SessionViewProp
       <div className="grid grid-cols-3 gap-3">
         <Card className="p-3 py-3">
           <CardContent className="p-0 flex items-center gap-2">
-            <div className="p-1.5 rounded-md bg-blue-50">
-              <Hash size={14} className="text-blue-600" />
+            <div className="p-1.5 rounded-md bg-blue-50 dark:bg-blue-400/15">
+              <Hash size={14} className="text-blue-600 dark:text-blue-400" />
             </div>
             <div>
-              <p className="text-[10px] text-gray-500 uppercase tracking-wider">Invocations</p>
-              <p className="text-lg font-bold tabular-nums">{aggregates.totalInvocations}</p>
+              <p className="text-3xs text-muted-foreground uppercase tracking-wider">Invocations</p>
+              <p className="font-display text-lg font-bold tabular-nums">
+                {aggregates.totalInvocations}
+              </p>
             </div>
           </CardContent>
         </Card>
 
         <Card className="p-3 py-3">
           <CardContent className="p-0 flex items-center gap-2">
-            <div className="p-1.5 rounded-md bg-purple-50">
-              <Layers size={14} className="text-purple-600" />
+            <div className="p-1.5 rounded-md bg-purple-50 dark:bg-purple-400/15">
+              <Layers size={14} className="text-purple-600 dark:text-purple-400" />
             </div>
             <div>
-              <p className="text-[10px] text-gray-500 uppercase tracking-wider">Total Segments</p>
-              <p className="text-lg font-bold tabular-nums">{aggregates.totalSegments}</p>
+              <p className="text-3xs text-muted-foreground uppercase tracking-wider">
+                Total Segments
+              </p>
+              <p className="font-display text-lg font-bold tabular-nums">
+                {aggregates.totalSegments}
+              </p>
             </div>
           </CardContent>
         </Card>
@@ -160,7 +168,7 @@ export default function SessionView({ caseId, traces, onClose }: SessionViewProp
               <OutcomeIcon outcome={aggregates.overallOutcome} />
             </div>
             <div>
-              <p className="text-[10px] text-gray-500 uppercase tracking-wider">Outcome</p>
+              <p className="text-3xs text-muted-foreground uppercase tracking-wider">Outcome</p>
               <p
                 className="text-sm font-semibold"
                 style={{ color: getOutcomeColor(aggregates.overallOutcome) }}
@@ -173,15 +181,14 @@ export default function SessionView({ caseId, traces, onClose }: SessionViewProp
       </div>
 
       {caseTraces.length === 0 && (
-        <p className="text-gray-400 text-xs text-center py-6">No traces found for this case.</p>
+        <p className="text-muted-foreground/70 text-xs text-center py-6">
+          No traces found for this case.
+        </p>
       )}
 
       {caseTraces.length > 0 && (
         <div className="relative pl-6">
-          <div
-            className="absolute left-[11px] top-3 bottom-3 w-px bg-gray-200"
-            aria-hidden="true"
-          />
+          <div className="absolute left-[11px] top-3 bottom-3 w-px bg-border" aria-hidden="true" />
 
           <div className="space-y-3">
             {caseTraces.map((trace, index) => {
@@ -206,7 +213,7 @@ export default function SessionView({ caseId, traces, onClose }: SessionViewProp
                   }}
                 >
                   <div
-                    className="absolute -left-6 top-3 w-[10px] h-[10px] rounded-full border-2 border-white"
+                    className="absolute -left-6 top-3 w-[10px] h-[10px] rounded-full border-2 border-background"
                     style={{ backgroundColor: getOutcomeColor(trace.outcome) }}
                     aria-hidden="true"
                   />
@@ -215,23 +222,23 @@ export default function SessionView({ caseId, traces, onClose }: SessionViewProp
                     <button
                       onClick={() => handleToggleTrace(trace.trace_id)}
                       className={`flex items-center gap-2 px-3 py-2.5 text-xs w-full text-left transition-colors ${
-                        isExpanded ? "bg-gray-50" : "hover:bg-gray-50"
+                        isExpanded ? "bg-muted" : "hover:bg-muted"
                       }`}
                       aria-expanded={isExpanded}
                     >
                       {isExpanded ? (
-                        <ChevronDown size={12} className="flex-none text-gray-400" />
+                        <ChevronDown size={12} className="flex-none text-muted-foreground/70" />
                       ) : (
-                        <ChevronRight size={12} className="flex-none text-gray-400" />
+                        <ChevronRight size={12} className="flex-none text-muted-foreground/70" />
                       )}
 
-                      <span className="text-gray-500 flex-none font-mono text-[11px]">
+                      <span className="text-muted-foreground flex-none font-mono text-2xs">
                         {date} {time}
                       </span>
 
                       <span className="inline-flex items-center gap-1 flex-none">
                         <TriggerIcon trigger={trace.trigger} />
-                        <span className="text-[11px] text-gray-600">
+                        <span className="text-2xs text-muted-foreground">
                           {getTriggerLabel(trace.trigger)}
                         </span>
                       </span>
@@ -239,20 +246,20 @@ export default function SessionView({ caseId, traces, onClose }: SessionViewProp
                       <span className="inline-flex items-center gap-1 flex-none">
                         <OutcomeIcon outcome={trace.outcome} />
                         <span
-                          className="text-[11px] font-medium"
+                          className="text-2xs font-medium"
                           style={{ color: getOutcomeColor(trace.outcome) }}
                         >
                           {getOutcomeLabel(trace.outcome)}
                         </span>
                       </span>
 
-                      <span className="flex-none text-gray-400 text-[10px] ml-auto">
+                      <span className="flex-none text-muted-foreground/70 text-3xs ml-auto">
                         {trace.segment_count} segment{trace.segment_count !== 1 ? "s" : ""}
                       </span>
                     </button>
 
                     {isExpanded && (
-                      <div className="border-t px-3 py-3 bg-white">
+                      <div className="border-t px-3 py-3 bg-card">
                         <SpanTimeline
                           segments={trace.segments}
                           isError={trace.outcome === "error" || trace.outcome === "cancelled"}

@@ -29,6 +29,11 @@ REGION="${AWS_REGION:-${AWS_DEFAULT_REGION:-$(aws configure get region 2>/dev/nu
 SAP_BASE_URL=$(awk '/^sap:/{found=1} found && /^[[:space:]]+base_url:/{gsub(/.*base_url:[[:space:]]*/, ""); gsub(/#.*/, ""); gsub(/^[[:space:]]+|[[:space:]]+$/, ""); print; exit}' "$CONFIG_FILE")
 [[ -z "$SAP_BASE_URL" ]] && fail "No sap.base_url found in $CONFIG_FILE"
 
+# Secret consumers append the OData service root themselves, so store the bare
+# host: an OData-root base_url here silently doubles the path and every SAP call
+# 404s. config.yaml conventionally carries the OData-root form, so strip it.
+SAP_BASE_URL=$(printf '%s' "$SAP_BASE_URL" | sed -E 's#/sap/opu/odata/sap/?$##; s#/+$##')
+
 SECRET_ARN=$(aws ssm get-parameter \
   --name "/${STACK_NAME}/secrets/sap-credentials-arn" \
   --query Parameter.Value --output text --region "$REGION" 2>/dev/null) \

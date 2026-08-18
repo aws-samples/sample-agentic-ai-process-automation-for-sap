@@ -1,0 +1,117 @@
+MISSING / INVALID PURCHASE ORDER — INVOICE EXCEPTION RESOLUTION
+STANDARD OPERATING PROCEDURE (SOP)
+Version 1.0
+
+================================================================================
+PURPOSE
+================================================================================
+
+This SOP defines how the agent resolves a MISSING / INVALID PURCHASE ORDER
+exception, where a supplier invoice references a purchase order (PO) that does
+not exist, is closed, or cannot be matched in SAP S/4HANA. It applies after
+three-way-match classification has identified the exception as a missing PO.
+
+The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT",
+"SHOULD", "SHOULD NOT", "RECOMMENDED", "MAY", and "OPTIONAL" in this
+document are to be interpreted as described in RFC 2119.
+
+================================================================================
+SCOPE
+================================================================================
+
+Process Type: missing_purchase_order
+SAP Modules:  MM (Materials Management), FI-AP (Accounts Payable)
+SAP Service:  API_SUPPLIERINVOICE_PROCESS_SRV
+Entities:     A_SupplierInvoice, A_PurchaseOrder
+
+================================================================================
+PRECONDITIONS
+================================================================================
+
+Before execution, the following MUST be true:
+
+1. The SAP MCP Server is reachable for reads.
+2. The case payload contains the supplier invoice number and fiscal year.
+3. The agent has NO memory of prior runs — each execution is stateless.
+
+================================================================================
+STEP 1: GATHER DATA
+================================================================================
+
+1.1  The agent MUST retrieve the invoice header and line items
+     (A_SupplierInvoice), including the vendor's stated PO reference, vendor
+     name, invoice amount, and line item descriptions.
+1.2  The agent MUST attempt to read the referenced PO (A_PurchaseOrder).
+
+================================================================================
+STEP 2: NORMALIZE AND RE-ATTEMPT THE PO LOOKUP
+================================================================================
+
+2.1  IF the PO read fails, the agent MUST try common key normalizations before
+     concluding the PO is missing:
+     - Add leading zeros to the PO number.
+     - Apply the company-code prefix, if applicable.
+     - Try a $filter query on PO number rather than a key-based read.
+2.2  The agent MUST NOT fabricate a PO number or invent line items.
+
+================================================================================
+STEP 3: APPLY RESOLUTION LOGIC
+================================================================================
+
+3.1  IF the PO is found after normalization:
+     - The agent MUST reprocess the invoice through three-way matching.
+
+3.2  IF the PO is genuinely missing or closed:
+     - The agent MUST send an email to {{CONTACT_PROCUREMENT}} asking them to
+       provide the correct PO number or confirm whether a new PO is required.
+       Include invoice#, vendor name, the vendor's PO reference, invoice amount,
+       and line item descriptions.
+     - The agent MUST update case state to "awaiting_human_input" and STOP.
+     - When the buyer responds with a valid PO, the agent MUST reprocess the
+       invoice through three-way matching.
+
+3.3  The agent MUST NOT post an invoice that has no valid PO reference.
+
+================================================================================
+STEP 4: CLOSE OR HAND OFF
+================================================================================
+
+4.1  Once a valid PO is established, the agent MUST continue resolution via
+     three-way matching (price, quantity, UoM, GR checks).
+4.2  IF procurement confirms no PO applies and the invoice cannot proceed, the
+     agent MUST mark the case for manual review by {{CONTACT_AP_TEAM}}.
+4.3  IF a write fails at any point, the agent MUST set the case to 'error',
+     notify {{CONTACT_AP_TEAM}}, and STOP.
+
+================================================================================
+ESCALATION RULES
+================================================================================
+
+| Trigger                          | Action                                |
+|----------------------------------|---------------------------------------|
+| PO missing after normalization   | Query {{CONTACT_PROCUREMENT}}         |
+| Procurement confirms no PO        | Manual review by {{CONTACT_AP_TEAM}} |
+| SAP write failure                | Notify {{CONTACT_AP_TEAM}}, set error |
+
+================================================================================
+CONTACTS
+================================================================================
+
+- Procurement: {{CONTACT_PROCUREMENT}}
+- AP Team:     {{CONTACT_AP_TEAM}}
+
+================================================================================
+TOLERANCES (CONFIGURABLE — DECLARED IN skills/finance_ap/config.json)
+================================================================================
+
+This SOP relies on no numeric tolerances; resolution is determined by PO
+existence and procurement confirmation.
+
+================================================================================
+REVISION HISTORY
+================================================================================
+
+| Version | Date       | Author | Changes                              |
+|---------|------------|--------|--------------------------------------|
+| 1.0     | 2026-07-21 | Kiro   | Initial focused SOP split from       |
+|         |            |        | invoice_matching v1.0 (PO NOT FOUND) |

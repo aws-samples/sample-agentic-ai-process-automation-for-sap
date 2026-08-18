@@ -400,8 +400,8 @@ def print_next_steps() -> None:
   SES starts in sandbox mode — you can only send to verified addresses.
 
   Option A — Custom domain (recommended for full send+receive):
-     If you have a people.aws.dev domain (see docs/Registering-Domain.md):
-     {C}./scripts/ops/setup-ses-domain.sh yourname.people.aws.dev{NC}
+     If you own a domain with a Route 53 hosted zone:
+     {C}./scripts/ops/setup-ses-domain.sh mail.example.com{NC}
      This automates DKIM, MX, and config.yaml updates in one command.
 
   Option B — Individual email verification (quick start):

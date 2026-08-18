@@ -74,7 +74,8 @@ resource "aws_lambda_permission" "autonomy_api" {
   source_arn    = "${aws_api_gateway_rest_api.feedback.execution_arn}/*/*"
 }
 
-# /cases (GET) + /cases/{doc}/{item} (GET) + nested
+# /cases (GET) + /cases/{case_id} (GET) + nested
+# One path parameter, because case_id is the cases table's partition key.
 
 resource "aws_api_gateway_resource" "cases" {
   rest_api_id = aws_api_gateway_rest_api.feedback.id
@@ -82,27 +83,21 @@ resource "aws_api_gateway_resource" "cases" {
   path_part   = "cases"
 }
 
-resource "aws_api_gateway_resource" "cases_doc" {
+resource "aws_api_gateway_resource" "cases_detail" {
   rest_api_id = aws_api_gateway_rest_api.feedback.id
   parent_id   = aws_api_gateway_resource.cases.id
-  path_part   = "{doc}"
-}
-
-resource "aws_api_gateway_resource" "cases_item" {
-  rest_api_id = aws_api_gateway_rest_api.feedback.id
-  parent_id   = aws_api_gateway_resource.cases_doc.id
-  path_part   = "{item}"
+  path_part   = "{case_id}"
 }
 
 resource "aws_api_gateway_resource" "cases_traces" {
   rest_api_id = aws_api_gateway_rest_api.feedback.id
-  parent_id   = aws_api_gateway_resource.cases_item.id
+  parent_id   = aws_api_gateway_resource.cases_detail.id
   path_part   = "traces"
 }
 
 resource "aws_api_gateway_resource" "cases_rating" {
   rest_api_id = aws_api_gateway_rest_api.feedback.id
-  parent_id   = aws_api_gateway_resource.cases_item.id
+  parent_id   = aws_api_gateway_resource.cases_detail.id
   path_part   = "rating"
 }
 
@@ -115,7 +110,7 @@ resource "aws_api_gateway_resource" "cases_enqueue" {
 locals {
   cases_routes = {
     cases_list    = { resource_id = aws_api_gateway_resource.cases.id, method = "GET", fn = aws_lambda_function.cases_api }
-    cases_detail  = { resource_id = aws_api_gateway_resource.cases_item.id, method = "GET", fn = aws_lambda_function.cases_api }
+    cases_detail  = { resource_id = aws_api_gateway_resource.cases_detail.id, method = "GET", fn = aws_lambda_function.cases_api }
     cases_traces  = { resource_id = aws_api_gateway_resource.cases_traces.id, method = "POST", fn = aws_lambda_function.cases_api }
     cases_rating  = { resource_id = aws_api_gateway_resource.cases_rating.id, method = "PUT", fn = aws_lambda_function.cases_api }
     cases_enqueue = { resource_id = aws_api_gateway_resource.cases_enqueue.id, method = "POST", fn = aws_lambda_function.webhook_processor }

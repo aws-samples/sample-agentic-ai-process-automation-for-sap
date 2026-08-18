@@ -43,20 +43,25 @@ Generate all of the following files. Read the existing examples first to match c
 
 #### 3a. Skill Config — `skills/{domain}/config.json`
 
-Read `skills/example_finance_accruals/config.json` as the template. Generate with:
+Delegate to `@author-skill` (`.kiro/powers/author-skill-power/`) to author the config, or read `skills/example_finance_accruals/config.json` as the template. Generate with:
 - `skill_id` matching the directory name
 - `process_type_to_sop` mapping each process type to an SOP path
 - `gateway_tools` — start with the homegrown standard set: `get_case_state`, `update_case_state`, `search_sap_sops`, `search_sap_api_docs`, `send_notification`
 - Add the SAP OData tools from the external MCP server target: `find_sap_services`, `get_metadata`, `get_service_hints`, `odata_read`, `odata_count`, `odata_create`, `odata_update`, `odata_function_import`
-- Add the demo ticket tools (`demo_create_ticket`, `demo_update_ticket`, `demo_get_ticket`, `demo_list_tickets`) only if running with `demo.enabled`
+- Add the demo ticket tools (`demo_create_ticket`, `demo_get_ticket`) only if running with `demo.enabled` — the escalation protocol only creates and reads tickets; status changes are human-only, via the Tickets dashboard
+- `constants` — declare tunable thresholds/SLAs here (e.g. variance %, escalation days). The SOP (3c) references them as `{{SYMBOL}}` placeholders; do NOT bake literal values into SOP text. See [ADR-014](../../../docs/design-decisions/014-sop-corpus-chunking.md).
 
 #### 3b. Base Prompt — `skills/{domain}/base_prompt.txt`
 
-Read `skills/example_finance_accruals/base_prompt.txt` as the template. The prompt MUST:
+Delegate to `@author-skill`, or read `skills/example_finance_accruals/base_prompt.txt` as the template. The prompt MUST:
+- Contain the `{PLATFORM_MECHANICS}` placeholder (the router injects `skills/_platform_prompt.txt` there)
 - Contain the `{SOP_CONTENT}` placeholder
-- Reference the correct SAP entity names and key fields from the OData specs
 - Describe the domain context so the agent understands what it's processing
-- List the available tools and when to use each one
+
+The prompt MUST NOT restate anything from `_platform_prompt.txt` — tool names, when to use each one,
+OData query scoping, write semantics, the escalation/ticket protocol. Those reach every skill already,
+and `make test` fails on a `base_prompt.txt` that duplicates them. Service and entity names belong in
+`config.json` → `sap_service`, which the shared preamble renders.
 
 #### 3c. SOP Draft — `knowledge-base/sops/{domain}/{sop_name}.txt`
 
@@ -148,7 +153,8 @@ Present the user with what was generated and what's still manual:
 - Directory names: `snake_case`
 - `skill_id` in config.json matches the directory name under `skills/`
 - SOP paths in config.json are relative to `knowledge-base/sops/`
-- The `{SOP_CONTENT}` placeholder in base_prompt.txt is required — the skill router injects the SOP there
+- The `{SOP_CONTENT}` and `{PLATFORM_MECHANICS}` placeholders in base_prompt.txt are both required — the skill router injects the SOP and the shared `skills/_platform_prompt.txt` there
 - `{{CONTACT_*}}` placeholders in SOPs are replaced from config.yaml contacts at runtime
+- `{{SYMBOL}}` placeholders in SOPs are replaced from the skill's `config.json` → `constants` at runtime (symbols match `[A-Z][A-Z0-9_]*`, must be declared). Tunable thresholds live in `constants`, never baked into SOP text — see [ADR-014](../../../docs/design-decisions/014-sop-corpus-chunking.md)
 - `types/cases.schema.json` is the single source of truth — the `domain` value and every `field_map` key in a poller config MUST exist in the schema
 - `make generate-types` validates poller configs against the schema at build time; the polling engine also validates at Lambda cold start (warnings in CloudWatch)

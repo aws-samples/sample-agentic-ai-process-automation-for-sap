@@ -1,8 +1,6 @@
 // Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
-"use client"
-
 import * as React from "react"
 import * as PopoverPrimitive from "@radix-ui/react-popover"
 

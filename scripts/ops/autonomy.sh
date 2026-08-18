@@ -5,8 +5,8 @@
 # Autonomy controls — flip trigger-mode without redeployment.
 #
 # Usage:
-#   ./scripts/autonomy.sh get                          # show current settings
-#   ./scripts/autonomy.sh set trigger-mode auto         # auto | manual
+#   ./scripts/ops/autonomy.sh get                       # show current settings
+#   ./scripts/ops/autonomy.sh set trigger-mode auto     # auto | manual
 #
 # Requires: aws cli configured with appropriate permissions.
 
