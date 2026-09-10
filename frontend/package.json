@@ -61,6 +61,6 @@
     "tw-animate-css": "^1.2.9",
     "typescript": "^5",
     "vite": "^7.3.6",
-    "vitest": "^4.1.10"
+    "vitest": "^4.1.11"
   }
 }
