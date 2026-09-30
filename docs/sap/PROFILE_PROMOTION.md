@@ -18,22 +18,22 @@ axis's hardening level, computed automatically. It is not a promotion gate; it's
 
 ### `blocked_by` — why an axis is stub
 
-`status: stub` says an axis isn't deployable end to end; it does **not** say the wiring is
-missing. Those are different facts with different owners, and collapsing them makes every
+`status: stub` says an axis has not yet run end to end in this sample; it does **not** say the
+wiring is missing. Those are different facts with different owners, and collapsing them makes every
 stub read as "nobody built it." So each stub axis declares `blocked_by`:
 
 | `blocked_by` | Means | Who clears it |
 |---|---|---|
-| `repo` | The IaC/runtime/adapter wiring genuinely does not exist here | Us, by writing code |
+| `repo` | The IaC/runtime/adapter wiring genuinely does not exist here | A code change in this repository |
 | `operator` | Wiring exists and is exercised; awaiting external config (an IdP tenant, a trust) | Whoever owns that external system |
-| `upstream` | Wiring exists; blocked by a defect in an AWS service | AWS |
+| `upstream` | Wiring exists; awaiting a dependency outside this repository | A dependency outside this repository |
 
 Absent `blocked_by` defaults to `repo` — the strict reading, so an unannotated stub is never
 flattered. `stub_blockers()` surfaces this per axis and the emitted artifact's banner names
 the cause, because "no IaC yet" was actively wrong for `operator`/`upstream` axes.
 
 **`blocked_by` is not a promotion gate.** It never substitutes for clearing `status: stub`,
-and an `operator`-blocked axis is exactly as undeployable as a `repo`-blocked one. It changes
+and an `operator`-blocked axis still carries `status: stub`, just as a `repo`-blocked one does. It changes
 what the banner *says*, not what the profile is allowed to claim. Only the two signals above
 gate promotion.
 
@@ -49,7 +49,7 @@ gate promotion.
   not yet support it. `test_preview_profiles_each_have_a_stub_axis` fails CI if a fully
   supported profile is left here (it should be promoted).
 
-So the split is enforced, not aspirational: you **cannot** move a profile into `profiles:`
+So the split is enforced: you **cannot** move a profile into `profiles:`
 while any of its axes is still `status: stub`. That is the whole point — "it's an accepted
 industry pattern" is not a reason to promote. The repository wiring must be implemented,
 synthesized, and deployment-tested.
@@ -100,7 +100,7 @@ doesn't have.
 - **Step 1:** the `frontend/direct-idp`, `inbound/jwt-authorizer`, and `outbound/obo` modules
   were built; the OBO-vs-Gateway guard was fixed (`validate_profile` exempts `obo_direct_mcp`);
   stubs cleared for the `entra` values only (okta stayed stub).
-- **Step 2:** run E2E against S/4HANA 2023 (SAP_BASIS 7.58) on 2026-07-08 → `verified: true`.
+- **Step 2:** run E2E against S/4HANA 2023 (SAP_BASIS 7.58) → `verified: true`.
 - **Now:** `profiles:`, zero stub axes, `verified: true`. Not zero-config — needs Entra
   `frontend_overrides` + `inbound_overrides`.
 
@@ -112,7 +112,7 @@ The useful contrast: a profile that earned `profiles:` membership and will likel
 - **Was:** `preview_profiles`, `frontend: direct-okta` and `inbound: okta` both
   `status: stub, blocked_by: operator` — the modules were built and proven on Entra, but no Okta
   org existed to point them at.
-- **Step 1 (2026-07-31):** an Okta org was supplied and the profile deployed. A real login through
+- **Step 1:** an Okta org was supplied and the profile deployed. A real login through
   the deployed SPA (PKCE, public client, no secret) issued an `id_token` that the deployed
   authorizer accepted, and the request reached the backend Lambda — Okta's log and CloudWatch agree
   on the same second. Both stubs cleared, profile moved to `profiles:`.
@@ -123,7 +123,7 @@ The useful contrast: a profile that earned `profiles:` membership and will likel
 Two things this example is here to show. First, `blocked_by: operator` was an honest label: supplying
 the external config *was* the entire remaining task. Second, clearing a shared axis does not cascade —
 `okta-userfed` selects both of the same Okta axes and stayed in `preview_profiles`, because its
-`user-federation` outbound is independently `upstream`-blocked.
+`user-federation` outbound (`blocked_by: upstream`) has not yet run end to end in this sample.
 
 ## Anti-patterns
 

@@ -43,15 +43,14 @@ If you need interactive per-user SAP auth:
 Per-test SAP-side operator runbooks live under [runbooks/](runbooks/README.md) — start at that
 index. In brief:
 
-7. [SOIDC / Entra-OBO runbook](runbooks/soidc-entra-obo.md) — the flagship OBO path: seamless
-   per-user OBO (Direct-Entra → `ON_BEHALF_OF_TOKEN_EXCHANGE` → SAP, no second login).
+7. [SOIDC / Entra-OBO runbook](runbooks/soidc-entra-obo.md) — per-user OBO
+   (Direct-Entra → `ON_BEHALF_OF_TOKEN_EXCHANGE` → SAP, no second login).
 8. [UF-OIDC runbook](runbooks/uf-oidc.md) — the base interactive USER_FEDERATION (OIDC) case: external **OIDC**
    IdP (Entra/Okta), SAP validates via SOIDC. Prefer Okta (email `sub`).
 9. [UF-SAML runbook](runbooks/uf-saml.md) — USER_FEDERATION (SAML) interactive per-user via an external **SAML**
    IdP, SAP as SAML SP behind an OAuth bridge (AgentCore speaks OAuth, not SAML).
 10. [UF-OAuth2-SAP runbook](runbooks/uf-oauth2-sap.md) — USER_FEDERATION with SAP as its own OAuth authorization
-    server. Documents why the "SAP-direct, no IdP" idea is **REFUTED** and the two documented
-    realizations (SAML-redirect / OIDC) instead.
+    server, no IdP (AWS User Federation Pattern 1) — each person signs in to SAP itself.
 
 ## Also here
 
@@ -63,4 +62,4 @@ index. In brief:
 - [Okta Setup](OKTA_SETUP.md) — Okta (Entra's sibling) inbound + direct-IdP frontend customer
   setup; same generic machinery as Entra, config-only. Start with `okta-basic`, which is
   CDK-supported — its two Okta axes were proven by a real login. `okta-userfed` adds per-user
-  SAP identity but its outbound is blocked upstream.
+  SAP identity but its outbound has not yet run end to end in this sample.

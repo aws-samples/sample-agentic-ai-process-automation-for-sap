@@ -7,7 +7,7 @@ SPDX-License-Identifier: Apache-2.0
 
 This guide walks you through deploying the Agentic ERP Automation Quickstart platform to AWS using CDK.
 
-> **Terraform alternative:** See the [Terraform Deployment Guide](TERRAFORM_DEPLOYMENT.md). We recommend choosing one IaC tool and deleting the other directory (`cdk/` or `terraform/`).
+> **Terraform alternative:** See the [Terraform Deployment Guide](TERRAFORM_DEPLOYMENT.md). Choose one IaC tool and delete the other directory (`cdk/` or `terraform/`).
 
 > **Auth profiles require the CDK backend.** The guided launcher and every non-default auth profile
 > (Entra/Okta inbound, M2M/OBO/user-federation outbound, direct-IdP frontend) are CDK-only.

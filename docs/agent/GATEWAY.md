@@ -27,15 +27,15 @@ There are two primary approaches to implementing AgentCore Gateway:
 - Simpler setup for basic scenarios
 - Direct client → gateway communication
 
-#### Lambda Targets (Our Choice)
+#### Lambda Targets (This Sample's Choice)
 - Gateway acts as a proxy/router to external Lambda functions
 - Each tool is implemented as a separate Lambda function
 - Client → Gateway → Lambda → Gateway → Client flow
 - Production-ready architecture with enterprise benefits
 
-### Why We Use Lambda Targets
+### Why This Sample Uses Lambda Targets
 
-We chose Lambda targets for the following production advantages:
+This sample uses Lambda targets for the following production advantages:
 
 1. **Separation of Concerns**: Business logic lives in Lambda functions, not gateway infrastructure
 2. **Independent Scaling**: Each tool can scale independently based on usage patterns

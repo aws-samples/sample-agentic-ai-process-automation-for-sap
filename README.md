@@ -14,6 +14,8 @@ SPDX-License-Identifier: Apache-2.0
 > This is a reference implementation intended for demonstration purposes. Review and adapt it — especially auth, autonomy controls, and SAP write paths — before deploying to a production environment. See [NOTICE](NOTICE) for details.
 >
 > This is sample code, for non-production usage. You should work with your security and legal teams to meet your organizational security, regulatory and compliance requirements before deployment.
+>
+> **SAP API Policy.** Use of SAP APIs is subject to the [SAP API Policy](https://help.sap.com/doc/sap-api-policy/latest/en-US/API_Policy_latest.pdf) and your agreements with SAP. Review both before connecting this sample to an SAP system.
 
 ![Agent chat UI](frontend/readme-imgs/fast-chat-screenshot.png)
 
@@ -98,12 +100,12 @@ See [Deployment Guide](docs/getting-started/DEPLOYMENT.md) for full instructions
 ## Key Features
 
 - **Multi-Skill Agent** — Dynamically loads domain expertise based on exception type. Each skill has a `config.json`, `base_prompt.txt`, and SOPs injected at runtime. Auto-discovered, no code changes to add new domains.
-- **Managed SAP OData via MCP** — the agent reaches SAP (reads, writes, discovery) through the external [AWS for SAP MCP Server](https://docs.aws.amazon.com/mcp-sap/latest/awsforsapmcp/introduction.html): service discovery, metadata inspection, and OData read/write/function-import tools. Our CDK is a thin adapter (Gateway target + OAuth2 provider) pointed at a customer-deployed SAP MCP stack; write enablement lives on that stack. See [ADR-012](docs/design-decisions/012-sap-mcp-server-integration.md).
+- **Managed SAP OData via MCP** — the agent reaches SAP (reads, writes, discovery) through the external [AWS for SAP MCP Server](https://docs.aws.amazon.com/mcp-sap/latest/awsforsapmcp/introduction.html): service discovery, metadata inspection, and OData read/write/function-import tools. This sample's CDK is a thin adapter (Gateway target + OAuth2 provider) pointed at a customer-deployed SAP MCP stack; write enablement lives on that stack. See [ADR-012](docs/design-decisions/012-sap-mcp-server-integration.md).
 - **Autonomy Controls** — `trigger-mode` (`auto` / `manual`) is an SSM-backed toggle, flippable without redeployment from Settings or the CLI, governing whether the poller auto-enqueues detected cases. Settings states what the mode has actually been doing and requires typing `AUTO` to arm. It gates *initiation*, not SAP writes — write gating lives in the Cedar policies at the Gateway and in the MCP server's write-enable flags. See [Autonomy controls](docs/security/AUTONOMY_CONTROLS.md).
 - **Pluggable Notifications** — SES, Jira, or ServiceNow — one config value swap in `config.yaml`.
 - **Ticket Management** — Built-in escalation and approval workflows correlated to ERP cases.
 - **SAP Connectivity & Identity** — Reference-only networking (you manage VPC/peering/VPN). The agent reaches SAP through the external AWS for SAP MCP server (reads + writes + discovery); the autonomous poller uses a service-account. See [SAP docs](docs/sap/CONNECTIVITY_AND_AUTH.md).
-- **Pluggable Enterprise Auth** — one config value (`auth_profile`) selects a full frontend/inbound/outbound identity path: Cognito + service-account for POC, or Entra/Okta-backed per-user identity (M2M, user federation, or seamless OBO token exchange) for production SAP access. See [Auth Profile Selection](docs/sap/AUTH_PROFILE_SELECTION.md).
+- **Pluggable Enterprise Auth** — one config value (`auth_profile`) selects a full frontend/inbound/outbound identity path: Cognito + service-account for POC, or Entra/Okta-backed per-user identity (M2M, user federation, or OBO token exchange) for production SAP access. See [Auth Profile Selection](docs/sap/AUTH_PROFILE_SELECTION.md).
 - **Cedar Policy Engine** — Gateway authorization via deterministic Cedar policies. See [ADR-004](docs/design-decisions/004-cedar-policy-engine.md).
 - **OData Discovery via MCP** — the SAP MCP server's `find_sap_services` / `get_metadata` / `get_service_hints` tools handle service discovery and `$metadata` inspection at runtime; no homegrown spec cache.
 

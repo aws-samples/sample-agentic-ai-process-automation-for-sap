@@ -47,7 +47,7 @@ Should the agent call tools via a managed MCP server (AgentCore Gateway wrapping
 
 ## This project's approach
 
-We use **Gateway with Lambda targets** for the agent's homegrown runtime tools (case management, notifications, knowledge-base search; see [ADR-001](../design-decisions/001-gateway-over-self-hosted-mcp.md)). SAP OData is reached through the external AWS for SAP MCP server, registered as a Gateway MCP target rather than a homegrown Lambda — see [ADR-012](../design-decisions/012-sap-mcp-server-integration.md).
+This sample uses **Gateway with Lambda targets** for the agent's homegrown runtime tools (case management, notifications, knowledge-base search; see [ADR-001](../design-decisions/001-gateway-over-self-hosted-mcp.md)). SAP OData is reached through the external AWS for SAP MCP server, registered as a Gateway MCP target rather than a homegrown Lambda — see [ADR-012](../design-decisions/012-sap-mcp-server-integration.md).
 
 ## Token overhead reference
 

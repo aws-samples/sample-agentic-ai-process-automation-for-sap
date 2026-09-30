@@ -13,12 +13,12 @@ Two profiles select the Okta axes, differing only in the outbound leg:
 
 | Profile | Outbound | Use it to |
 |---|---|---|
-| `okta-basic` | `basic` (GA) | Prove the **Okta axes** (`direct-okta` frontend + `okta` inbound) end-to-end. SAP identity is the technical user, so nothing depends on a blocked outbound. **Start here** — both axes were cleared this way, so it is CDK-supported (unverified: its outbound never carries a user to SAP). |
-| `okta-userfed` | `user-federation` (stub) | Add per-user SAP identity. Blocked upstream — see [`SAP_MCP_USER_FEDERATION.md`](SAP_MCP_USER_FEDERATION.md). |
+| `okta-basic` | `basic` (GA) | Prove the **Okta axes** (`direct-okta` frontend + `okta` inbound) end-to-end. SAP identity is the technical user, so nothing depends on the per-user outbound leg. **Start here** — both axes were cleared this way, so it is CDK-supported (not marked `verified`: its outbound never carries a user to SAP). |
+| `okta-userfed` | `user-federation` (stub) | Add per-user SAP identity. Not yet run end to end in this sample — see [`SAP_MCP_USER_FEDERATION.md`](SAP_MCP_USER_FEDERATION.md). |
 
-`okta-basic` exists because `user-federation` cannot currently complete: AgentCore Identity never
-redeems the Okta authorization code in its 3LO vault. That blocker is on the **outbound** leg only,
-so it does not have to gate proving the inbound and frontend axes.
+`okta-basic` exists because `user-federation` has not yet run end to end in this sample: in the
+Okta test the per-user token was not stored in the token vault. That gap is on the **outbound** leg
+only, so it does not have to gate proving the inbound and frontend axes.
 
 > **STATUS.** The Okta→SOIDC→SAP token round-trip was **live-verified** against an S/4HANA 2023
 > system (standalone-MCP variant): Okta custom authorization server, SOIDC email mapping on `sub`,
@@ -40,7 +40,7 @@ so it does not have to gate proving the inbound and frontend axes.
 >
 > **Two non-obvious SAP-side gotchas that gated the round-trip (both cost hours):**
 > 1. **ICF logon-procedure ORDER on the OData node.** SAP has two independent OIDC modes —
->    `OIDC Bearer Token` (Bearer passthrough, what we use) and `OIDC Logon` (interactive redirect).
+>    `OIDC Bearer Token` (Bearer passthrough, what this sample uses) and `OIDC Logon` (interactive redirect).
 >    ICF tries the node's procedures *in list order*; if `OIDC Logon` precedes `OIDC Bearer Token`,
 >    a headless Bearer call matches the interactive procedure first and 401s with HTML
 >    `Anmeldung fehlgeschlagen`. Fix: remove `OIDC Logon` from the node (or order Bearer first).
@@ -241,8 +241,8 @@ settings are known-good:
   token is bad.
 
 **But no deployable profile forwards an Okta user token today, so this trust has exactly one consumer:
-the local smoke test.** `okta-userfed` would use it and is upstream-blocked in AgentCore Identity's 3LO
-vault; `okta-basic` — the only deployable Okta profile — goes to SAP as a Basic technical user and never
+the local smoke test.** `okta-userfed` would use it and has not yet run end to end in this
+sample; `okta-basic` — the only deployable Okta profile — goes to SAP as a Basic technical user and never
 touches SOIDC. Confirm the SAP side with the smoke test; a redeploy will not exercise it.
 
 Keep the SOIDC mapping user distinct from the Basic outbound user for the same reason. If one SU01
@@ -319,7 +319,7 @@ pinned there and the SPA's id is added alongside rather than swapped in.
 `sap_mcp.external_stack` needs a vendor stack running `AuthFlow=BASIC`. Its **`InboundAuthProvider` is
 a separate parameter and does not have to be Okta** — those two axes are independent, and CDK synth
 enforces only the flow. So the Gateway may keep presenting a Cognito or Entra token to the runtime
-while the *user* logs in through Okta; the user's token is validated at our own authorizer, not the
+while the *user* logs in through Okta; the user's token is validated at this sample's own authorizer, not the
 vendor runtime's. Whatever IdP that inbound parameter names, `external_stack` must carry the matching
 client id / discovery URL / client-secret ARN, because the Gateway's credential provider is what mints
 that token.

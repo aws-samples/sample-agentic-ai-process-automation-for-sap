@@ -20,7 +20,7 @@ New here? Start at [EVALUATIONS_QUICKSTART.md](EVALUATIONS_QUICKSTART.md).
 3. [Online (live) evaluations for this stack](#online-live-evaluations-for-this-stack)
 4. [Custom evaluator: SAPActionAccuracy](#custom-evaluator-sapactionaccuracy)
 5. [On-demand evaluation](#on-demand-evaluation)
-6. [Built-in evaluators we use](#built-in-evaluators-we-use)
+6. [Built-in evaluators this sample uses](#built-in-evaluators-this-sample-uses)
 7. [Where results land](#where-results-land)
 8. [Best practices](#best-practices)
 9. [References](#references)
@@ -191,7 +191,7 @@ for r in results.results:
 
 ---
 
-## Built-in evaluators we use
+## Built-in evaluators this sample uses
 
 This stack relies on six evaluators (five built-in + `SAPActionAccuracy`). The full built-in
 catalog and placeholder reference live in the official docs.

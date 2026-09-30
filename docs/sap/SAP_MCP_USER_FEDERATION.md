@@ -5,12 +5,12 @@ SPDX-License-Identifier: Apache-2.0
 
 # SAP MCP — USER_FEDERATION (3-Legged Interactive) Setup
 
-> **NAMING.** This is `USER_FEDERATION` — a **3-legged interactive** login. It is **NOT** the
+> **Naming.** This is `USER_FEDERATION` — a **3-legged interactive** login. It is **not** the
 > literal `ON_BEHALF_OF_TOKEN_EXCHANGE` flow (OBO / ON_BEHALF_OF_TOKEN_EXCHANGE, direct-to-MCP),
 > even though older text called this "interactive OBO." The two are different token mechanisms —
 > see [TOKEN_MECHANICS.md](./TOKEN_MECHANICS.md).
 >
-> **STATUS.** USER_FEDERATION is implemented for external mode (Gateway user target). The
+> **Status.** USER_FEDERATION is implemented for external mode (Gateway user target). The
 > interactive auth URL surfaces through the Gateway as tool-result JSON. What remains is the
 > SAP-side trust + a real-user audit proof in your own SAP system — see the same-sub federation
 > runbook. Treat as a reference design, not yet run end-to-end; validate against your own SAP
@@ -35,7 +35,7 @@ JWT for a SAP bearer and forward it). That design appears infeasible because the
 [ADR-012 — Update (2026-06-05)](../design-decisions/012-sap-mcp-server-integration.md#update-2026-06-05-hybrid-deploy-model--m2m-implemented-phase-2-mechanism-revised).
 The related `AuthFlow=ON_BEHALF_OF_TOKEN_EXCHANGE` (non-interactive, server-to-server) is out of
 scope **for this interactive USER_FEDERATION flow** — it is the separate **OBO /
-ON_BEHALF_OF_TOKEN_EXCHANGE flagship** (seamless, no second login) via the direct-to-MCP path: see
+ON_BEHALF_OF_TOKEN_EXCHANGE** flow (no second login) via the direct-to-MCP path: see
 [runbooks/soidc-entra-obo.md](./runbooks/soidc-entra-obo.md).
 
 ## Which Cognito? Two gates, not a relay
@@ -47,28 +47,28 @@ relay.** There are two **separate** Cognito-touching gates that never chain toge
 | | Gate 1 — Inbound (invoke the Runtime) | Gate 2 — Outbound OBO (reach SAP as the human) |
 |---|---|---|
 | **What** | Gateway presents a Bearer the Runtime's authorizer trusts | `USER_FEDERATION` 3-legged login to SAP's OAuth server (IAS on RISE) |
-| **Which Cognito** | The **external SAP MCP stack's inbound pool** | **Our user-facing (frontend) pool** |
-| **Who owns it** | AWS-published SAP MCP CFN stack | This project / CDK |
+| **Which Cognito** | The **external SAP MCP stack's inbound pool** | **This sample's user-facing (frontend) pool** |
+| **Who owns it** | The SAP MCP AWS CloudFormation stack that AWS publishes | This project / CDK |
 | **What's in it** | Machine/M2M tokens only — no humans | The actual humans, with verified `email` |
-| **Is IAS involved?** | No — pure machine-to-machine, stops at the Runtime door | Yes — IAS trusts our user-facing pool **directly** as a corporate IdP |
+| **Is IAS involved?** | No — pure machine-to-machine, stops at the Runtime door | Yes — IAS trusts this sample's user-facing pool **directly** as a corporate IdP |
 
 Key facts that kill the misconception:
 
 - **`USER_FEDERATION` does not spin up a user pool.** The MCP inbound pool exists for *every*
   flow (BASIC, M2M, USER_FEDERATION) as the Runtime's front-door authorizer; it is created by
-  the external CFN stack, not by `USER_FEDERATION`, and never by us. `USER_FEDERATION` itself
+  the external CloudFormation stack, not by `USER_FEDERATION`, and never by us. `USER_FEDERATION` itself
   references an AgentCore Identity OAuth provider **by name** pointed at SAP's OAuth server
   (`authorize_url`/`token_url`) — not at any Cognito.
 - **The MCP inbound pool is never in the identity chain.** IAS never sees it. The only thing
-  that crosses the SAP boundary is the human's **`email`** claim, federated from our
+  that crosses the SAP boundary is the human's **`email`** claim, federated from this sample's
   **user-facing** pool to IAS directly. Same-sub trust is **not transitive** — neither the MCP
   pool, the Gateway, nor Federate relays the human identity (see
   [SAP_MCP_SAME_SUB_FEDERATION.md](./SAP_MCP_SAME_SUB_FEDERATION.md)).
 - **The container's role in OBO is to *start* the login, not to be a link in the chain.** It
   emits the interactive auth URL (which surfaces back through the Gateway as tool-result JSON);
-  the human then authenticates at IAS, which delegates to our user-facing pool.
+  the human then authenticates at IAS, which delegates to this sample's user-facing pool.
 
-> **In one sentence:** we use **our user-facing Cognito as the user pool, federated directly to
+> **In one sentence:** this sample uses **its user-facing Cognito as the user pool, federated directly to
 > SAP's IAS**; the MCP's own Cognito is a separate machine-auth gate and nothing is carried
 > through it to IAS.
 
@@ -81,16 +81,16 @@ USER_FEDERATION involves **two distinct callback URLs**. Conflating them silentl
    IdP/SAP. **It must be registered as an allowed redirect URI with your IdP (XSUAA/IAS/Entra) and
    the SAP OAuth client.** You obtain it from the deployed AWS stack (its outputs / AgentCore
    Identity provider config), not from this repo's config.
-2. **`MCP_SERVER_APP_CALLBACK_URL`** — **our frontend route** (`/auth/callback`). This is where
+2. **`MCP_SERVER_APP_CALLBACK_URL`** — **this sample's frontend route** (`/auth/callback`). This is where
    AgentCore redirects the browser **after** the IdP exchange completes, to signal completion back
-   to our application. Set as `MCP_SERVER_APP_CALLBACK_URL` on the **external** AWS-for-SAP MCP
+   to this application. Set as `MCP_SERVER_APP_CALLBACK_URL` on the **external** AWS-for-SAP MCP
    stack (post-refactor — no longer a `cdk/config.yaml` `sap_mcp.user` field; see the Configuration
    note below).
 
 | URL | Owner | Registered where | Purpose |
 |---|---|---|---|
 | AgentCore callback URL | AWS stack / AgentCore Identity | IdP + SAP OAuth client (redirect URI allowlist) | Completes the OAuth code exchange |
-| `MCP_SERVER_APP_CALLBACK_URL` (`/auth/callback`) | Our frontend | Our config (`app_callback_url`) | Signals completion to our app |
+| `MCP_SERVER_APP_CALLBACK_URL` (`/auth/callback`) | This sample's frontend | This sample's config (`app_callback_url`) | Signals completion to this app |
 
 ## IdP redirect-URI registration
 
@@ -112,29 +112,29 @@ OAuth provider is registered with `authorizationServerMetadata` (explicit endpoi
 
 ## Configuration
 
-> **STALE (pre-refactor) config surface — the `sap_mcp.user:` block below is no longer read.** The
+> **Stale (pre-refactor) config surface — the `sap_mcp.user:` block below is no longer read.** The
 > adapter refactor removed the manual `service`/`user` runtime blocks: the target variant is now
 > **derived from `auth_profile`'s outbound axis** (`user-federation` → User target), and the SAP
 > OAuth knobs (`MCP_SERVER_SAP_OAUTH_FLOW`, the SAP `authorize`/`token` endpoints, scopes,
 > `MCP_SERVER_APP_CALLBACK_URL`, read/write enablement) all live on the **external** AWS-for-SAP MCP
-> stack (its CFN params / runtime env vars), not in this repo's `config.yaml`. Our
+> stack (its CloudFormation parameters / runtime env vars), not in this repo's `config.yaml`. This sample's
 > `config-manager.ts` validates only `sap_mcp.external_stack.stack_name` (+ the OBO coherence guard).
 > The block below is retained only to show the field *names* → their `MCP_SERVER_*` env-var
 > equivalents on the external stack. Operator steps:
-> [runbooks/uf-oauth2-sap.md](./runbooks/uf-oauth2-sap.md) (SAP-direct) and
+> [runbooks/uf-oauth2-sap.md](./runbooks/uf-oauth2-sap.md) (SAP as OAuth server, no IdP) and
 > [runbooks/uf-saml.md](./runbooks/uf-saml.md) (SAML).
 
 ```yaml
-# Field-name → external-stack env-var reference (NOT a live config.yaml block anymore):
+# Field-name → external-stack env-var reference (not a live config.yaml block anymore):
 sap_mcp:
   enabled: true
   external_stack:
-    stack_name: sap-mcp-server-prod        # AWS CFN stack to read outputs from
+    stack_name: sap-mcp-server-prod        # CloudFormation stack to read outputs from
     inbound_auth_provider: Cognito         # Cognito (default) | EntraId
     inbound_cognito:
       client_secret_arn: "arn:aws:secretsmanager:us-east-1:ACCT:secret:ext-cognito-XXXX"
 
-  # --- pre-refactor `user:` block, shown for the field→env-var mapping only; NOT read: ---
+  # --- pre-refactor `user:` block, shown for the field→env-var mapping only; not read: ---
   user:
     auth_flow: USER_FEDERATION             # → MCP_SERVER_SAP_OAUTH_FLOW (set on the external stack)
     sap_oauth:                             # → the external stack's SAP OAuth provider endpoints
@@ -148,10 +148,10 @@ sap_mcp:
 
 USER_FEDERATION's interactive flow assumes the **MCP client** receives the AgentCore-issued auth
 URL and drives the browser login. With the Gateway terminating MCP, the Gateway is the client, so
-there was an open question of whether the auth-URL handoff would surface to our agent/frontend.
+there was an open question of whether the auth-URL handoff would surface to this sample's agent/frontend.
 This is resolved: the auth URL surfaces through the Gateway as tool-result JSON.
 
-- **Auth URL surfaces through the Gateway.** We use the frontend-callback model: the agent relays
+- **Auth URL surfaces through the Gateway.** This sample uses the frontend-callback model: the agent relays
   the auth URL to the frontend, the user logs in, the IdP redirects to the AgentCore callback, and
   AgentCore then redirects to `/auth/callback` to signal completion. OBO calls keep flowing through
   the Gateway (Cedar + audit interception intact).
@@ -161,20 +161,11 @@ This is resolved: the auth URL surfaces through the Gateway as tool-result JSON.
   interception for OBO calls. That is not the case.
 
 The external-mode USER_FEDERATION Gateway target is wired, and the auth-URL handoff surfaces
-correctly. **End-to-end is currently blocked upstream in AgentCore Identity**, not in this repo
-or SAP — see the status note below.
-
-> **STATUS — 3LO auto-vault blocked in AgentCore Identity.** Testing against an Okta custom
-> authorization server proved every layer this project owns is correct, but the token never
-> vaults. The Okta System Log shows every `authorize.code` SUCCEEDS against AgentCore's callback
-> (`…/identities/oauth2/callback/<guid>`), yet **no `app.oauth2.as.token.grant` is ever issued
-> for that callback** — AgentCore's managed callback receives the authorization code but never
-> redeems it at the IdP's `/token` endpoint, so the MCP poller times out (600s) and the agent
-> re-prompts. A direct-SDK repro that bypasses the MCP server reproduces the same behavior, so
-> the defect is in AgentCore Identity's USER_FEDERATION 3LO with a custom-OIDC provider — not
-> the vendor server, not this project's code. The **SAP trust chain itself is proven** (a real
-> Okta user token returns SAP OData 200 as the mapped user via pass-through test). Escalation
-> is with the AgentCore Identity team.
+correctly. This sample has not yet run the flow end to end: in the Okta test, the authorization
+code reached AgentCore Identity's callback but the per-user token was not stored in the token vault,
+so the MCP server's wait for it timed out. This sample tracks that as `blocked_by: upstream` in
+`auth-profiles.yaml`. Separately, a real Okta user token passed straight to SAP returned OData data
+as the mapped SAP user, so the SAP-side trust works on its own.
 
 ## Per-user token flow
 
@@ -189,7 +180,7 @@ validation.
 ## Troubleshooting
 
 **401 from the runtime** — inbound auth mismatch. In `external` mode the Gateway OAuth2 provider
-must point at the **external stack's** inbound IdP (its client id + discovery URL), not our pool;
+must point at the **external stack's** inbound IdP (its client id + discovery URL), not this sample's pool;
 see [SAP_MCP_INTEGRATION.md troubleshooting](./SAP_MCP_INTEGRATION.md#troubleshooting).
 
 **No interactive auth URL surfaces to the agent/frontend** — the auth URL *does* surface through

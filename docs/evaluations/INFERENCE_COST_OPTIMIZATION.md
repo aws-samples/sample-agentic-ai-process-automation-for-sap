@@ -23,7 +23,7 @@ For Knowledge Base infrastructure cost (now S3 Vectors pay-per-use), see [KB Cos
 | Multi-agent mode | Built but disabled (`multi_agent: false`) |
 | Exemplars | Infrastructure exists, content not generated |
 
-The key insight from the benchmark: **60–70% of agent turns are mechanical** — calling tools, following SOP formulas, writing to DynamoDB. Only 2–3 turns per case require genuine reasoning (ambiguous date parsing, conflicting data resolution, escalation judgment). We're paying Sonnet prices ($3/$15 per M tokens) for Haiku-level work on most turns.
+The key insight from the benchmark: **60–70% of agent turns are mechanical** — calling tools, following SOP formulas, writing to DynamoDB. Only 2–3 turns per case require genuine reasoning (ambiguous date parsing, conflicting data resolution, escalation judgment). The agent pays Sonnet prices ($3/$15 per M tokens) for Haiku-level work on most turns.
 
 ## Optimization 1: Enable Multi-Agent Mode (Haiku Orchestrator)
 

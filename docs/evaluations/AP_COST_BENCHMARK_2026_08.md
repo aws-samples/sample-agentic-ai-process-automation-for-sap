@@ -5,11 +5,11 @@ SPDX-License-Identifier: Apache-2.0
 
 # AP Cost Benchmark Analysis — August 2026
 
-This document explains the cost change observed in the August 8, 2026 AP benchmark run. It supplements the historical [AP Cost-Per-Exception Benchmark](COST_BENCHMARK.md), which remains the record of the earlier run.
+This document explains the cost change observed in the August 2026 AP benchmark run. It supplements the historical [AP Cost-Per-Exception Benchmark](COST_BENCHMARK.md), which remains the record of the earlier run.
 
 ## Result
 
-The benchmark ran 50 AP cases against the non-production `erp-agent-dd3` stack in `us-east-1`. All 50 cases produced cost data and reached a verified terminal state. The durable result is [`agentcore/evals/ap_cost_benchmark/report.json`](../../agentcore/evals/ap_cost_benchmark/report.json), timestamped `2026-08-08T02:47:25.760169+00:00`.
+The benchmark ran 50 AP cases against a non-production test stack in `us-east-1`. All 50 cases produced cost data and reached a verified terminal state. The durable result is [`agentcore/evals/ap_cost_benchmark/report.json`](../../agentcore/evals/ap_cost_benchmark/report.json), from August 2026.
 
 | Metric | Earlier run | August 2026 run | Change |
 |---|---:|---:|---:|

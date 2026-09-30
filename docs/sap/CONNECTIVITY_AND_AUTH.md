@@ -7,6 +7,8 @@ SPDX-License-Identifier: Apache-2.0
 
 > **New to SAP setup here?** Read this first, then [SAP_SETUP.md](./SAP_SETUP.md) to configure, then [SAP_MCP_INTEGRATION.md](./SAP_MCP_INTEGRATION.md) if you need the MCP server.
 
+> **SAP API Policy.** Use of SAP APIs is subject to the [SAP API Policy](https://help.sap.com/doc/sap-api-policy/latest/en-US/API_Policy_latest.pdf) and your agreements with SAP. Review both before connecting this sample to an SAP system.
+
 Both SAP connectivity and auth are configured in `config.yaml`. The agent, tool Lambdas, and frontend code are identical regardless of how SAP is reached.
 
 > **SAP access model.** The agent reaches SAP exclusively through the external **AWS for SAP MCP server** (a Gateway MCP target) — reads, writes, and discovery. The only component that calls SAP *directly* is the autonomous **OData poller** (a scheduled Lambda that cannot use the Gateway/MCP tools), and it uses a **service-account** (basic auth). There is no per-user SAP identity mode in this sample; interactive user→SAP identity is handled by the MCP server's `USER_FEDERATION` flow (see [SAP MCP integration](./SAP_MCP_INTEGRATION.md) and [same-sub federation](./SAP_MCP_SAME_SUB_FEDERATION.md)).

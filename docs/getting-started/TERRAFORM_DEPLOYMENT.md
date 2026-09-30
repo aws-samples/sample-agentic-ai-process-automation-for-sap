@@ -7,7 +7,7 @@ SPDX-License-Identifier: Apache-2.0
 
 This guide walks you through deploying the Agentic ERP Automation Quickstart to AWS using Terraform.
 
-> **CDK alternative:** This guide covers Terraform deployment. This project also supports AWS CDK -- see [Deployment Guide](DEPLOYMENT.md) for the CDK deployment guide. We recommend choosing one infrastructure tool and deleting the other directory (`cdk/` or `terraform/`) from your fork to keep things clean.
+> **CDK alternative:** This guide covers Terraform deployment. This project also supports AWS CDK -- see [Deployment Guide](DEPLOYMENT.md) for the CDK deployment guide. Choose one infrastructure tool and delete the other directory (`cdk/` or `terraform/`) from your fork to keep things clean.
 
 > **Auth-profile scope — Terraform deploys `cognito-basic` only.** Terraform consumes just the
 > inbound axis; the outbound (SAP MCP target), mode (batch runner), and frontend (direct-IdP SPA)

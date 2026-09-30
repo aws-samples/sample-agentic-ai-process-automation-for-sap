@@ -21,7 +21,7 @@ at the **MCP → SAP** wire.
 | Mechanism | Flow value | Logins | SAP-facing token | Minted where | SAP trusts (SOIDC/SAML issuer) |
 |---|---|---|---|---|---|
 | **Token passthrough / reuse** | *(not on this stack — see below)* | 1 | the **same** inbound token, reused verbatim | nowhere; no exchange | the **same IdP** the user logged into |
-| **OBO token exchange** | `ON_BEHALF_OF_TOKEN_EXCHANGE` | 1 (seamless) | a **new, SAP-scoped** token carrying the user's identity | AgentCore Identity, server-side (RFC 7523 `jwt-bearer`, outbound app creds) | the **outbound exchange app** issuer |
+| **OBO token exchange** | `ON_BEHALF_OF_TOKEN_EXCHANGE` | 1 (no second sign-in) | a **new, SAP-scoped** token carrying the user's identity | AgentCore Identity, server-side (RFC 7523 `jwt-bearer`, outbound app creds) | the **outbound exchange app** issuer |
 | **User federation (3-legged)** | `USER_FEDERATION` | 1–2 (interactive) | a **new** token from a fresh interactive authorization-code login | AgentCore drives a browser `authorization_code` flow | the IdP (OIDC) or SAP-as-SAML-SP |
 | **Machine-to-machine** | `M2M` | 0 (no human) | a machine token, **no human identity** | client-credentials | app / technical user |
 
@@ -66,7 +66,7 @@ agent acts on behalf of the user). That's a real English description, but it col
 ## See also
 
 - [SAP_MCP_INTEGRATION.md](./SAP_MCP_INTEGRATION.md) — the flow/topology overview and deploy model.
-- [runbooks/soidc-entra-obo.md](./runbooks/soidc-entra-obo.md) — OBO / `ON_BEHALF_OF_TOKEN_EXCHANGE` exchange (the flagship).
+- [runbooks/soidc-entra-obo.md](./runbooks/soidc-entra-obo.md) — OBO / `ON_BEHALF_OF_TOKEN_EXCHANGE` exchange.
 - [runbooks/uf-oidc.md](./runbooks/uf-oidc.md) — USER_FEDERATION (OIDC).
 - [SAP_MCP_SAME_SUB_FEDERATION.md](./SAP_MCP_SAME_SUB_FEDERATION.md) — the email-join federation idea,
-  the closest thing we have to a "one issuer end-to-end" trust model.
+  the closest thing this sample has to a "one issuer end-to-end" trust model.

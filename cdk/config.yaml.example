@@ -162,7 +162,7 @@ cedar_enforcement_mode: LOG_ONLY  # LOG_ONLY | ENFORCE
 # per-op MCP_SERVER_CREATE/UPDATE/DELETE/FUNCTION_IMPORT_ENABLED). See:
 # https://docs.aws.amazon.com/mcp-sap/latest/awsforsapmcp/configuration-reference.html
 #
-# Our CDK only mints the Gateway target pointed at it. Gateway-side, Cedar
+# This sample's CDK only mints the Gateway target pointed at it. Gateway-side, Cedar
 # policies govern writes (role gate on create/update/function_import;
 # odata_delete forbidden); there is no action-mode kill-switch (threat T6).
 #
@@ -176,7 +176,7 @@ cedar_enforcement_mode: LOG_ONLY  # LOG_ONLY | ENFORCE
 #   external_stack:
 #     stack_name: sap-mcp-server-prod
 #     region: us-east-1               # region of the external stack; defaults to deploy region
-#     inbound_auth_provider: Cognito  # Cognito | EntraId (must match the CFN deploy)
+#     inbound_auth_provider: Cognito  # Cognito | EntraId (must match the CloudFormation deploy)
 #     # OAuth scopes the Gateway requests for the inbound token to the external
 #     # runtime. For the AWS-published stack these are its M2M resource-server
 #     # scopes (e.g. awsforsap-mcp-m2m-resource-server-<id>/read and /write).

@@ -302,18 +302,18 @@ def run_emit(
 
     if stubs:
         # Name the cause per axis: "no IaC yet" was wrong for axes whose wiring is
-        # built and only awaiting external config (operator) or an AWS fix (upstream).
+        # built and only awaiting external config (operator) or an upstream change (upstream).
         blockers = stub_blockers(profile, cat)
         _CAUSE = {
             "repo": "wiring not built here",
             "operator": "wiring built, awaiting external config",
-            "upstream": "wiring built, blocked in an AWS service",
+            "upstream": "wiring built, awaiting an upstream change",
         }
         detail = ", ".join(
             f"{a} ({_CAUSE[blockers[a]]})" if blockers.get(a) in _CAUSE else a
             for a in stubs
         )
-        note = f"stub axes — not deployable end to end: {detail}"
+        note = f"stub axes — not yet run end to end in this sample: {detail}"
         artifact["banner"] = (artifact.get("banner", "").rstrip() + "\n" + note).strip()
         artifact["stub_blockers"] = blockers
 

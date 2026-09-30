@@ -18,7 +18,7 @@ authorizations then apply.
 
 It is token/claim-based federation — no CA to operate.
 
-## What our CDK builds vs. what you configure
+## What this sample's CDK builds vs. what you configure
 
 | Side | Owner | What |
 |---|---|---|

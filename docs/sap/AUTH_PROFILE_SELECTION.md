@@ -60,7 +60,7 @@ end-to-end against a live SAP system (S/4HANA 2023, SAP_BASIS 7.58); see
 
 **`okta-basic` is likewise not zero-config** and needs both override blocks with your Okta org values
 (see [`OKTA_SETUP.md`](./OKTA_SETUP.md)). Its Verified column stays `—` on purpose: its two Okta axes
-were proven by a real login on 2026-07-31 — the deployed SPA's PKCE flow issued an `id_token` that the
+were proven by a real login — the deployed SPA's PKCE flow issued an `id_token` that the
 deployed authorizer accepted, and the request reached the backend — but its outbound is a Basic
 technical user, so nothing per-user reaches SAP and the `verified` bar (a live-SAP E2E run) is not met.
 Its frontend axis is still `experimental`, so the deployment emits a maturity caveat.
@@ -71,24 +71,25 @@ Its frontend axis is still `experimental`, so the deployment emits a maturity ca
 |---------|----------|---------|------|----------|----------|-------|
 | `cognito-userfed-ias` | Cognito | Cognito | live | user-federation | USER_FEDERATION | IAS trust chain |
 | `entra-userfed` | Cognito+Federated | Cognito | live, batch | user-federation | USER_FEDERATION | Email-join federation. Its `batch` is the *user-identity* flavour (acting as a named absent human), which needs a refresh-capable outbound — distinct from `cognito-m2m-batch` above. It also omits `autonomous`, so it fails the batch synth gate as written. |
-| `okta-userfed` | Direct-Okta | Okta | live | user-federation | USER_FEDERATION | Okta inbound + outbound. **Its outbound is blocked upstream**, not merely unimplemented here: AgentCore Identity's managed 3LO callback takes the Okta auth code and never redeems it, so no token vaults. It is therefore the wrong profile to pick when you want to exercise a SAP-side Okta SOIDC trust — nothing deployable forwards an Okta user token today. Use `okta-basic` for the Okta axes, and `test-scripts/test-okta-sap-local.py` for the SOIDC trust — noting that the test reports pass/fail, not *where* a failure is: on a system whose 401 challenge scheme varies with header length, localising it needs SOIDC's paste-a-token validator or the SAP audit log. |
+| `okta-userfed` | Direct-Okta | Okta | live | user-federation | USER_FEDERATION | Okta inbound + outbound. **Its outbound is not yet run end to end in this sample**: in the Okta test the authorization code reached AgentCore Identity's callback, but the per-user token was not stored in the token vault. It is therefore the wrong profile to pick when you want to exercise a SAP-side Okta SOIDC trust — nothing deployable forwards an Okta user token today. Use `okta-basic` for the Okta axes, and `test-scripts/test-okta-sap-local.py` for the SOIDC trust — noting that the test reports pass/fail, not *where* a failure is: on a system whose 401 challenge scheme varies with header length, localising it needs SOIDC's paste-a-token validator or the SAP audit log. |
 
-Preview profiles resolve and validate, but this repository's CDK deployment path cannot stand them
-up end to end — at least one selected axis is `status: stub`. They document the roadmap. Promotion
+Preview profiles resolve, validate and deploy, but at least one selected axis is `status: stub`,
+so `run_emit` prints a stub-axis notice naming each such axis and its `blocked_by` cause. None of
+them has yet run end to end in this sample. They document the roadmap. Promotion
 criteria and the two-gate model (`status` = supported by the repository's CDK deployment path,
 `verified` = run against live SAP) live in [`PROFILE_PROMOTION.md`](./PROFILE_PROMOTION.md).
 
 **Stub does not always mean unbuilt.** Each stub axis declares `blocked_by` in
 `auth-profiles.yaml`: `repo` (wiring missing here), `operator` (wiring built, awaiting external
-config such as an IdP tenant), or `upstream` (wiring built, blocked in an AWS service). This changes
-what the emitted banner reports, not whether the profile can deploy — a stub axis is undeployable
-regardless of who owns the blocker.
+config such as an IdP tenant), or `upstream` (wiring built, awaiting an upstream change). This changes
+what the stub-axis notice reports, not whether the profile deploys — the profile deploys either way,
+and stays unconfirmed end to end regardless of who owns the remaining step.
 
 Both Okta axes used to be `operator`, and clearing them shows what that classification was worth: the
 wiring really was built (the authorizer and direct-IdP frontend are issuer-parameterized, proven on
 Entra over the same code), so supplying the external config was the whole remaining task. Note what
 did **not** happen when they cleared — `okta-userfed` shares both of those axes and stayed in preview,
-because its `user-federation` outbound is `upstream`-blocked in AgentCore Identity's 3LO vault. Axis
+because its `user-federation` outbound (`blocked_by: upstream`) has not yet run end to end in this sample. Axis
 status is shared; profile promotion is not.
 
 ## Decision tree
@@ -101,11 +102,11 @@ Do you need interactive per-user SAP identity?
 │                   ├── No  → cognito-m2m (M2M client credentials to SAP)
 │                   └── Yes → cognito-m2m-batch (adds the batch sweeper; same
 │                             technical-user identity, re-minted per run)
-└── Yes → Seamless (no second login, server-side token exchange)?
+└── Yes → No second login (server-side token exchange)?
           ├── Yes → entra-obo (direct-to-MCP OBO, Entra inbound) — CDK-supported;
           │         needs Entra frontend_overrides + inbound_overrides (not zero-config)
           └── No, 3-legged interactive login → (preview — all three share the
-                user-federation outbound, blocked upstream in AgentCore's 3LO vault)
+                user-federation outbound, not yet run end to end in this sample)
                 ├── Cognito users + IAS federation → cognito-userfed-ias
                 ├── Cognito federated + Entra → entra-userfed
                 └── Okta inbound + outbound → okta-userfed

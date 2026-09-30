@@ -28,7 +28,7 @@ nav:
       - M2M OAuth2 (SAP): sap/runbooks/m2m-oauth2-sap.md
       - User Federation (OIDC): sap/runbooks/uf-oidc.md
       - User Federation (SAML): sap/runbooks/uf-saml.md
-      - User Federation (OAuth2-SAP): sap/runbooks/uf-oauth2-sap.md
+      - User Federation (SAP as OAuth server): sap/runbooks/uf-oauth2-sap.md
   - Agent Internals:
     - Agent Configuration: agent/AGENT_CONFIGURATION.md
     - Gateway: agent/GATEWAY.md
