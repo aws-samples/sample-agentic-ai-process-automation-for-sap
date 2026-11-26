@@ -3,6 +3,11 @@ Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
 SPDX-License-Identifier: Apache-2.0
 -->
 
+> [!IMPORTANT]
+> This sample is superseded by the **Agentic Business Platform Accelerator for SAP on AWS**, at
+> https://github.com/aws-samples/sample-agentcore-enterprise-platform-on-aws-for-sap. Use it for new work.
+> This repository is no longer maintained and will be archived.
+
 # Agentic ERP Automation Quickstart
 
 ![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue) ![Python 3.12+](https://img.shields.io/badge/python-3.12%2B-blue) ![Node 20+](https://img.shields.io/badge/node-20%2B-blue) ![Built with AWS CDK](https://img.shields.io/badge/IaC-AWS%20CDK-orange)
